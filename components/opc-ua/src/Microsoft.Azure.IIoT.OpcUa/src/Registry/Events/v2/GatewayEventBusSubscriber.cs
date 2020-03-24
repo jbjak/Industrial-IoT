@@ -45,7 +45,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Events.v2 {
                 case GatewayEventType.Updated:
                     await Task.WhenAll(_listeners
                         .Select(l => l.OnGatewayUpdatedAsync(
-                            eventData.Context, eventData.Gateway, eventData.IsPatch ?? false)
+                            eventData.Context, eventData.Gateway)
                         .ContinueWith(t => Task.CompletedTask)));
                     break;
                 case GatewayEventType.Deleted:

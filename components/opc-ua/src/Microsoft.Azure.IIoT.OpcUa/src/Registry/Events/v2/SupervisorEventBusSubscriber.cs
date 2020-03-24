@@ -45,7 +45,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Events.v2 {
                 case SupervisorEventType.Updated:
                     await Task.WhenAll(_listeners
                         .Select(l => l.OnSupervisorUpdatedAsync(
-                            eventData.Context, eventData.Supervisor, eventData.IsPatch ?? false)
+                            eventData.Context, eventData.Supervisor)
                         .ContinueWith(t => Task.CompletedTask)));
                     break;
                 case SupervisorEventType.Deleted:

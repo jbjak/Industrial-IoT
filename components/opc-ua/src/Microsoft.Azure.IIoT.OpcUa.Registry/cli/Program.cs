@@ -451,7 +451,7 @@ Operations (Mutually exclusive):
 
             /// <inheritdoc/>
             public Task OnApplicationUpdatedAsync(RegistryOperationContextModel context,
-                ApplicationInfoModel application, bool isPatch) {
+                ApplicationInfoModel application) {
                 Console.WriteLine($"Updated {application.ApplicationId}");
                 return Task.CompletedTask;
             }
@@ -500,7 +500,7 @@ Operations (Mutually exclusive):
 
             /// <inheritdoc/>
             public Task OnEndpointUpdatedAsync(RegistryOperationContextModel context,
-                EndpointInfoModel endpoint, bool isPatch) {
+                EndpointInfoModel endpoint) {
                 Console.WriteLine($"Updated {endpoint.Registration.Id}");
                 return Task.CompletedTask;
             }

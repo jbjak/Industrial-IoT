@@ -226,7 +226,7 @@ namespace Microsoft.Azure.IIoT.App {
             // Register http client module (needed for api)...
             builder.RegisterModule<HttpClientModule>();
             builder.RegisterType<SignalRHubClient>()
-                .AsImplementedInterfaces().AsSelf().SingleInstance();
+                .AsImplementedInterfaces(); // Per request
 
             // Use bearer authentication
             builder.RegisterType<HttpBearerAuthentication>()

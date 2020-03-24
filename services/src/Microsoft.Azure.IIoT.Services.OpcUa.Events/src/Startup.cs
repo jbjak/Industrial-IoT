@@ -118,7 +118,7 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Events {
             // Add signalr and optionally configure signalr service
             services.AddSignalR()
                 .AddJsonSerializer()
-                .AddMessagePackSerializer()
+                // .AddMessagePackSerializer()
                 .AddAzureSignalRService(Config);
 
             services.AddSwagger(Config, ServiceInfo.Name, ServiceInfo.Description);
@@ -158,8 +158,8 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Events {
             app.UseSwagger();
             app.UseMetricServer();
             app.UseEndpoints(endpoints => {
-                endpoints.MapControllers();
                 endpoints.MapHubs();
+                endpoints.MapControllers();
                 endpoints.MapHealthChecks("/healthz");
             });
 

@@ -45,7 +45,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Events.v2 {
                 case PublisherEventType.Updated:
                     await Task.WhenAll(_listeners
                         .Select(l => l.OnPublisherUpdatedAsync(
-                            eventData.Context, eventData.Publisher, eventData.IsPatch ?? false)
+                            eventData.Context, eventData.Publisher)
                         .ContinueWith(t => Task.CompletedTask)));
                     break;
                 case PublisherEventType.Deleted:

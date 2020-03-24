@@ -279,7 +279,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Services {
 
         /// <inheritdoc/>
         public Task OnApplicationUpdatedAsync(RegistryOperationContextModel context,
-            ApplicationInfoModel application, bool isPatch) {
+            ApplicationInfoModel application) {
             return Task.CompletedTask;
         }
 

@@ -57,7 +57,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Events.v2 {
                 case ApplicationEventType.Updated:
                     await Task.WhenAll(_listeners
                         .Select(l => l.OnApplicationUpdatedAsync(
-                            eventData.Context, eventData.Application, eventData.IsPatch ?? false)
+                            eventData.Context, eventData.Application)
                         .ContinueWith(t => Task.CompletedTask)));
                     break;
                 case ApplicationEventType.Deleted:
