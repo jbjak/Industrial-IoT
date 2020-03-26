@@ -35,6 +35,7 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Events {
     using Autofac.Extensions.DependencyInjection;
     using Prometheus;
     using System;
+    using Microsoft.Azure.IIoT.Messaging;
 
     /// <summary>
     /// Webservice startup
@@ -250,11 +251,13 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Events {
             builder.RegisterType<ServiceBusClientFactory>()
                 .AsImplementedInterfaces().SingleInstance();
             builder.RegisterType<ServiceBusEventBus>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces().SingleInstance()
+                .IfNotRegistered(typeof(IEventBus));
 
             // Register event processor host for telemetry
             builder.RegisterType<EventProcessorHost>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces().SingleInstance()
+                .IfNotRegistered(typeof(IEventProcessingHost));
             builder.RegisterType<EventProcessorFactory>()
                 .AsImplementedInterfaces().SingleInstance();
             builder.RegisterType<EventHubDeviceEventHandler>()

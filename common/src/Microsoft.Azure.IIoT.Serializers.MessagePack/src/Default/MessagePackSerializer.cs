@@ -376,6 +376,11 @@ namespace Microsoft.Azure.IIoT.Serializers.MessagePack {
                         Compare.Using<object>((x, y) => DeepEquals(x, y)));
                 }
 
+                // Test array
+                if (t1 is byte[] b1 && t2 is byte[] b2) {
+                    return b1.SequenceEqual(b2);
+                }
+
                 // Test value equals
                 if (t1.Equals(t2)) {
                     return true;
@@ -410,7 +415,7 @@ namespace Microsoft.Azure.IIoT.Serializers.MessagePack {
 
             private readonly MessagePackSerializerOptions _options;
             private readonly Action<object> _update;
-            private object _value;
+            internal object _value;
         }
 
         /// <summary>
@@ -451,7 +456,7 @@ namespace Microsoft.Azure.IIoT.Serializers.MessagePack {
                 public void Serialize(ref MessagePackWriter writer, T value,
                     MessagePackSerializerOptions options) {
                     if (value is MessagePackVariantValue packed) {
-                        MsgPack.Serialize(ref writer, packed.Value, options);
+                        MsgPack.Serialize(ref writer, packed._value, options);
                     }
                     else if (value is VariantValue variant) {
                         if (variant.IsNull()) {
@@ -482,8 +487,8 @@ namespace Microsoft.Azure.IIoT.Serializers.MessagePack {
                 public int Serialize(ref byte[] bytes, int offset, T value,
                     MessagePackSerializerOptions options) {
                     if (value is MessagePackVariantValue packed) {
-                        return MsgPack.Serialize(packed.Value?.GetType() ?? typeof(object),
-                            ref bytes, offset, packed.Value, options);
+                        return MsgPack.Serialize(packed._value?.GetType() ?? typeof(object),
+                            ref bytes, offset, packed._value, options);
                     }
                     else if (value is VariantValue variant) {
                         if (variant.IsNull()) {

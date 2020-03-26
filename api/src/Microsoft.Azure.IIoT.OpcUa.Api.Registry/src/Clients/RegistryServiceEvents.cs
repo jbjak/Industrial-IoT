@@ -132,7 +132,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Registry {
             if (callback == null) {
                 throw new ArgumentNullException(nameof(callback));
             }
-            var hub = await _client.GetHubAsync($"{_serviceUri}/v2/discovery/events", _resourceId);
+            var hub = await _client.GetHubAsync($"{_serviceUri}/v2/discovery/events",
+                _resourceId);
             var registration = hub.Register(EventTargets.DiscoveryProgressTarget, callback);
             try {
                 await SubscribeDiscoveryProgressByDiscovererIdAsync(discovererId,
@@ -153,7 +154,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Registry {
             if (callback == null) {
                 throw new ArgumentNullException(nameof(callback));
             }
-            var hub = await _client.GetHubAsync($"{_serviceUri}/v2/discovery/events", _resourceId);
+            var hub = await _client.GetHubAsync($"{_serviceUri}/v2/discovery/events",
+                _resourceId);
             var registration = hub.Register(EventTargets.DiscoveryProgressTarget, callback);
             try {
                 await SubscribeDiscoveryProgressByRequestIdAsync(requestId, hub.ConnectionId,
@@ -170,62 +172,64 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Registry {
 
         /// <inheritdoc/>
         public async Task SubscribeDiscoveryProgressByDiscovererIdAsync(string discovererId,
-            string userId, CancellationToken ct) {
+            string connectionId, CancellationToken ct) {
             if (string.IsNullOrEmpty(discovererId)) {
                 throw new ArgumentNullException(nameof(discovererId));
             }
-            if (string.IsNullOrEmpty(userId)) {
-                throw new ArgumentNullException(nameof(userId));
+            if (string.IsNullOrEmpty(connectionId)) {
+                throw new ArgumentNullException(nameof(connectionId));
             }
             var request = _httpClient.NewRequest(
                 $"{_serviceUri}/v2/discovery/{discovererId}/events", _resourceId);
-            _serializer.SerializeToRequest(request, userId);
+            _serializer.SerializeToRequest(request, connectionId);
             var response = await _httpClient.PutAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
 
         /// <inheritdoc/>
         public async Task SubscribeDiscoveryProgressByRequestIdAsync(string requestId,
-            string userId, CancellationToken ct) {
+            string connectionId, CancellationToken ct) {
             if (string.IsNullOrEmpty(requestId)) {
                 throw new ArgumentNullException(nameof(requestId));
             }
-            if (string.IsNullOrEmpty(userId)) {
-                throw new ArgumentNullException(nameof(userId));
+            if (string.IsNullOrEmpty(connectionId)) {
+                throw new ArgumentNullException(nameof(connectionId));
             }
             var request = _httpClient.NewRequest(
                 $"{_serviceUri}/v2/discovery/requests/{requestId}/events", _resourceId);
-            _serializer.SerializeToRequest(request, userId);
+            _serializer.SerializeToRequest(request, connectionId);
             var response = await _httpClient.PutAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
 
         /// <inheritdoc/>
         public async Task UnsubscribeDiscoveryProgressByDiscovererIdAsync(string discovererId,
-            string userId, CancellationToken ct) {
+            string connectionId, CancellationToken ct) {
             if (string.IsNullOrEmpty(discovererId)) {
                 throw new ArgumentNullException(nameof(discovererId));
             }
-            if (string.IsNullOrEmpty(userId)) {
-                throw new ArgumentNullException(nameof(userId));
+            if (string.IsNullOrEmpty(connectionId)) {
+                throw new ArgumentNullException(nameof(connectionId));
             }
             var request = _httpClient.NewRequest(
-                $"{_serviceUri}/v2/discovery/{discovererId}/events/{userId}", _resourceId);
+                $"{_serviceUri}/v2/discovery/{discovererId}/events/{connectionId}",
+                _resourceId);
             var response = await _httpClient.DeleteAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
 
         /// <inheritdoc/>
         public async Task UnsubscribeDiscoveryProgressByRequestIdAsync(string requestId,
-            string userId, CancellationToken ct) {
+            string connectionId, CancellationToken ct) {
             if (string.IsNullOrEmpty(requestId)) {
                 throw new ArgumentNullException(nameof(requestId));
             }
-            if (string.IsNullOrEmpty(userId)) {
-                throw new ArgumentNullException(nameof(userId));
+            if (string.IsNullOrEmpty(connectionId)) {
+                throw new ArgumentNullException(nameof(connectionId));
             }
             var request = _httpClient.NewRequest(
-                $"{_serviceUri}/v2/discovery/requests/{requestId}/events/{userId}", _resourceId);
+                $"{_serviceUri}/v2/discovery/requests/{requestId}/events/{connectionId}",
+                _resourceId);
             var response = await _httpClient.DeleteAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
