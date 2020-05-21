@@ -42,7 +42,7 @@ Browse nodes services
 <a name="browse"></a>
 #### Browse node references
 ```
-POST /v2/browse/{endpointId}
+POST /twin/v2/browse/{endpointId}
 ```
 
 
@@ -71,24 +71,21 @@ Browse a node on the specified endpoint. The endpoint must be activated and conn
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="getsetofuniquenodes"></a>
 #### Browse set of unique target nodes
 ```
-GET /v2/browse/{endpointId}
+GET /twin/v2/browse/{endpointId}
 ```
 
 
@@ -113,20 +110,16 @@ Browse the set of unique hierarchically referenced target nodes on the endpoint.
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="browsenext"></a>
 #### Browse next set of references
 ```
-POST /v2/browse/{endpointId}/next
+POST /twin/v2/browse/{endpointId}/next
 ```
 
 
@@ -155,24 +148,21 @@ Browse next set of references on the endpoint. The endpoint must be activated an
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="getnextsetofuniquenodes"></a>
 #### Browse next set of unique target nodes
 ```
-GET /v2/browse/{endpointId}/next
+GET /twin/v2/browse/{endpointId}/next
 ```
 
 
@@ -197,20 +187,16 @@ Browse the next set of unique hierarchically referenced target nodes on the endp
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="browseusingpath"></a>
 #### Browse using a browse path
 ```
-POST /v2/browse/{endpointId}/path
+POST /twin/v2/browse/{endpointId}/path
 ```
 
 
@@ -239,18 +225,15 @@ Browse using a path from the specified node id. This call uses TranslateBrowsePa
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="call_resource"></a>
@@ -261,7 +244,7 @@ Call node method services
 <a name="callmethod"></a>
 #### Call a method
 ```
-POST /v2/call/{endpointId}
+POST /twin/v2/call/{endpointId}
 ```
 
 
@@ -290,24 +273,21 @@ Invoke method node with specified input arguments. The endpoint must be activate
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="getcallmetadata"></a>
 #### Get method meta data
 ```
-POST /v2/call/{endpointId}/metadata
+POST /twin/v2/call/{endpointId}/metadata
 ```
 
 
@@ -336,18 +316,15 @@ Return method meta data to support a user interface displaying forms to input an
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="read_resource"></a>
@@ -358,7 +335,7 @@ Node read services
 <a name="readvalue"></a>
 #### Read variable value
 ```
-POST /v2/read/{endpointId}
+POST /twin/v2/read/{endpointId}
 ```
 
 
@@ -387,24 +364,21 @@ Read a variable node's value. The endpoint must be activated and connected and t
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="getvalue"></a>
 #### Get variable value
 ```
-GET /v2/read/{endpointId}
+GET /twin/v2/read/{endpointId}
 ```
 
 
@@ -429,20 +403,16 @@ Get a variable node's value using its node id. The endpoint must be activated an
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="readattributes"></a>
 #### Read node attributes
 ```
-POST /v2/read/{endpointId}/attributes
+POST /twin/v2/read/{endpointId}/attributes
 ```
 
 
@@ -471,18 +441,15 @@ Read attributes of a node. The endpoint must be activated and connected and the 
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="write_resource"></a>
@@ -493,7 +460,7 @@ Node writing services
 <a name="writevalue"></a>
 #### Write variable value
 ```
-POST /v2/write/{endpointId}
+POST /twin/v2/write/{endpointId}
 ```
 
 
@@ -522,24 +489,21 @@ Write variable node's value. The endpoint must be activated and connected and th
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="writeattributes"></a>
 #### Write node attributes
 ```
-POST /v2/write/{endpointId}/attributes
+POST /twin/v2/write/{endpointId}/attributes
 ```
 
 
@@ -568,18 +532,15 @@ Write any attribute of a node. The endpoint must be activated and connected and 
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 

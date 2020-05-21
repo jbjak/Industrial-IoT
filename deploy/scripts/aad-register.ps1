@@ -1,4 +1,4 @@
-<#
+﻿<#
  .SYNOPSIS
     Registers required applications
 
@@ -31,8 +31,17 @@ Function Select-Context() {
     if ($context) {
         return $context
     }
-    $contextFile = Join-Path $script:ScriptDir ".user"
+
+    $rootDir = Get-RootFolder $script:ScriptDir
+    $contextFile = Join-Path $rootDir ".user"
     if (Test-Path $contextFile) {
+        # Migrate .user file into root (next to .env)
+        if (!(Test-Path $contextFile)) {
+            $oldFile = Join-Path $script:ScriptDir ".user"
+            if (Test-Path $oldFile) {
+                Move-Item -Path $oldFile -Destination $contextFile
+            }
+        }
         $profile = Import-AzContext -Path $contextFile
         if ($profile.Context) {
             return $profile.Context
@@ -52,6 +61,23 @@ Function Select-Context() {
     catch {
         throw "The login to the Azure account was not successful."
     }
+}
+
+#******************************************************************************
+# find the top most folder with solution in it
+#******************************************************************************
+Function Get-RootFolder() {
+    param(
+        $startDir
+    )
+    $cur = $startDir
+    while (![string]::IsNullOrEmpty($cur)) {
+        if (Test-Path -Path (Join-Path $cur "Industrial-IoT.sln") -PathType Leaf) {
+            return $cur
+        }
+        $cur = Split-Path $cur
+    }
+    return $startDir
 }
 
 #*******************************************************************************************************
@@ -143,7 +169,7 @@ Function New-AppRole() {
 }
 
 #*******************************************************************************************************
-# Get configuration object for service and client applications
+# Get configuration object for service, web and client applications
 #*******************************************************************************************************
 Function New-ADApplications() {
     param(
@@ -157,13 +183,14 @@ Function New-ADApplications() {
                 -TenantId $context.Tenant.Id `
                 -AccountId $context.Account.Id `
                 -Credential $context.Account.Credential
-            }
+        }
         catch {
             # For some accounts $context.Account.Id may be first.last@something.com which might 
             # not be correct UserPrincipalName. In those cases we will prompt for another login.
             $creds = Connect-AzureAD `
                 -AzureEnvironmentName $context.Environment.Name `
                 -TenantId $context.Tenant.Id `
+        
         }
 
         if (!$creds) {
@@ -188,12 +215,11 @@ Function New-ADApplications() {
             Write-Verbose "Getting user principal for $($creds.Account.Id) failed."
         }
 
-        # Get or create client application
+        # Get or create native client application
         $clientDisplayName = $applicationName + "-client"
         $clientAadApplication = Get-AzureADApplication -Filter "DisplayName eq '$clientDisplayName'"
         if (!$clientAadApplication) {
-            $clientAadApplication = New-AzureADApplication -DisplayName $clientDisplayName `
-                -PublicClient $True
+            $clientAadApplication = New-AzureADApplication -DisplayName $clientDisplayName -PublicClient $True
             Write-Host "Created new AAD client application '$($clientDisplayName)' in Tenant '$($tenantName)'."
             if ($user) {
                 Write-Host "Adding '$($user.UserPrincipalName)' as owner ..."
@@ -206,13 +232,38 @@ Function New-ADApplications() {
                 }
             }
         }
-        $clientSecret = New-AzureADApplicationPasswordCredential -ObjectId $clientAadApplication.ObjectId `
-            -CustomKeyIdentifier "Client Key" -EndDate (get-date).AddYears(2)
 
         # Find client service principal
         $clientServicePrincipal = Get-AzureADServicePrincipal -Filter "AppId eq '$($clientAadApplication.AppId)'"
         if (!$clientServicePrincipal) {
             $clientServicePrincipal = New-AzureADServicePrincipal -AppId $clientAadApplication.AppId `
+                -Tags { WindowsAzureActiveDirectoryIntegratedApp }
+        }
+
+        # Get or create web application
+        $webDisplayName = $applicationName + "-web"
+        $webAadApplication = Get-AzureADApplication -Filter "DisplayName eq '$webDisplayName'"
+        if (!$webAadApplication) {
+            $webAadApplication = New-AzureADApplication -DisplayName $webDisplayName 
+            Write-Host "Created new AAD web app '$($webDisplayName)' in Tenant '$($tenantName)'."
+            if ($user) {
+                Write-Host "Adding '$($user.UserPrincipalName)' as owner ..."
+                try {
+                    Add-AzureADApplicationOwner -ObjectId $webAadApplication.ObjectId `
+                        -RefObjectId $user.ObjectId
+                }
+                catch {
+                    Write-Verbose "Adding $($user.UserPrincipalName) as owner failed."
+                }
+            }
+        }
+        $webSecret = New-AzureADApplicationPasswordCredential -ObjectId $webAadApplication.ObjectId `
+            -CustomKeyIdentifier "Client Key" -EndDate (get-date).AddYears(2)
+
+        # Find web service principal
+        $webServicePrincipal = Get-AzureADServicePrincipal -Filter "AppId eq '$($webAadApplication.AppId)'"
+        if (!$webServicePrincipal) {
+            $webServicePrincipal = New-AzureADServicePrincipal -AppId $webAadApplication.AppId `
                 -Tags { WindowsAzureActiveDirectoryIntegratedApp }
         }
 
@@ -259,26 +310,35 @@ Function New-ADApplications() {
         $appRoles.Add($approverRole)
         $appRoles.Add($adminRole)
 
-        $knownApplications = New-Object System.Collections.Generic.List[System.String]
-        $knownApplications.Add($clientAadApplication.AppId)
-
         $requiredResourcesAccess = `
             New-Object System.Collections.Generic.List[Microsoft.Open.AzureAD.Model.RequiredResourceAccess]
         $requiredPermissions = Get-RequiredPermissions -applicationDisplayName "Microsoft Graph" `
             -requiredDelegatedPermissions "User.Read"
         $requiredResourcesAccess.Add($requiredPermissions)
-        $requiredPermissions = Get-RequiredPermissions -applicationDisplayName "Azure Storage" `
-            -requiredDelegatedPermissions "user_impersonation"
-        $requiredResourcesAccess.Add($requiredPermissions)
+
+        $knownApplications = New-Object System.Collections.Generic.List[System.String]
+        $knownApplications.Add($clientAadApplication.AppId)
+        $knownApplications.Add($webAadApplication.AppId)
+        $knownApplications.Add("04b07795-8ddb-461a-bbee-02f9e1bf7b46")
+        $knownApplications.Add("872cd9fa-d31f-45e0-9eab-6e460a02d1f1")
 
         Set-AzureADApplication -ObjectId $serviceAadApplication.ObjectId `
             -KnownClientApplications $knownApplications `
             -AppRoles $appRoles `
             -RequiredResourceAccess $requiredResourcesAccess | Out-Null
-        Write-Host "'$($serviceDisplayName)' updated with required resource access, app roles and known applications."
 
-        # Read updated app roles for service principal
+        # Read updated service principal
         $serviceServicePrincipal = Get-AzureADServicePrincipal -Filter "AppId eq '$($serviceAadApplication.AppId)'"
+
+        # Add 1) Azure CLI and 2) Visual Studio to allow log onto the platform with them as clients
+        Add-PreauthorizedApplication -servicePrincipal $serviceServicePrincipal `
+            -azureAppObjectId $serviceAadApplication.ObjectId `
+            -azurePreAuthAppId "04b07795-8ddb-461a-bbee-02f9e1bf7b46" -context $context | Out-Null
+        Add-PreauthorizedApplication -servicePrincipal $serviceServicePrincipal `
+            -azureAppObjectId $serviceAadApplication.ObjectId `
+            -azurePreAuthAppId "872cd9fa-d31f-45e0-9eab-6e460a02d1f1" -context $context | Out-Null
+
+        Write-Host "'$($serviceDisplayName)' updated with required resource access, app roles and known applications."
 
         # Add current user as Writer, Approver and Administrator for service application
         try {
@@ -306,6 +366,8 @@ Function New-ADApplications() {
         # Update client application to add reply urls required permissions.
         $replyUrls = New-Object System.Collections.Generic.List[System.String]
         $replyUrls.Add("urn:ietf:wg:oauth:2.0:oob")
+        $replyUrls.Add("https://localhost")
+        $replyUrls.Add("http://localhost")
         $requiredResourcesAccess = `
             New-Object System.Collections.Generic.List[Microsoft.Open.AzureAD.Model.RequiredResourceAccess]
         $requiredPermissions = Get-RequiredPermissions -applicationDisplayName $serviceDisplayName `
@@ -314,19 +376,32 @@ Function New-ADApplications() {
         $requiredPermissions = Get-RequiredPermissions -applicationDisplayName "Microsoft Graph" `
             -requiredDelegatedPermissions "User.Read"
         $requiredResourcesAccess.Add($requiredPermissions)
+        
         Set-AzureADApplication -ObjectId $clientAadApplication.ObjectId `
             -RequiredResourceAccess $requiredResourcesAccess -ReplyUrls $replyUrls `
-            -Oauth2AllowImplicitFlow $True -Oauth2AllowUrlPathMatching $True | Out-Null
-
-        Write-Host "'$($clientDisplayName)' updated with required resource access."
-        # Grant permissions to app
+            -Oauth2AllowImplicitFlow $False -Oauth2AllowUrlPathMatching $True | Out-Null
+        # Grant permissions to native client
         try {
             Add-AdminConsentGrant -azureAppId $clientAadApplication.AppId -context $context | Out-Null
-            Write-Host "Admin consent granted to client application."
+            Write-Host "Admin consent granted to native client application."
         }
         catch {
             Write-Host "$($_.Exception) - this must be done manually with appropriate permissions."
         }
+        Write-Host "'$($clientDisplayName)' updated with required resource access."
+
+        Set-AzureADApplication -ObjectId $webAadApplication.ObjectId `
+            -RequiredResourceAccess $requiredResourcesAccess `
+            -Oauth2AllowImplicitFlow $True -Oauth2AllowUrlPathMatching $True | Out-Null
+        # Grant permissions to web app
+        try {
+            Add-AdminConsentGrant -azureAppId $webAadApplication.AppId -context $context | Out-Null
+            Write-Host "Admin consent granted to web application."
+        }
+        catch {
+            Write-Host "$($_.Exception) - this must be done manually with appropriate permissions."
+        }
+        Write-Host "'$($webDisplayName)' updated with required resource access."
 
         return [pscustomobject] @{
             TenantId           = $creds.Tenant.Id
@@ -340,8 +415,14 @@ Function New-ADApplications() {
 
             ClientId           = $clientAadApplication.AppId
             ClientPrincipalId  = $clientAadApplication.ObjectId
-            ClientSecret       = $clientSecret.Value
             ClientDisplayName  = $clientDisplayName
+
+            WebAppId           = $webAadApplication.AppId
+            WebAppPrincipalId  = $webAadApplication.ObjectId
+            WebAppSecret       = $webSecret.Value
+            WebAppDisplayName  = $webDisplayName
+
+            UserPrincipalId    = $user.ObjectId
         }
     }
     catch {
@@ -371,12 +452,12 @@ Function Add-AdminConsentGrant() {
     $url = "https://main.iam.ad.ext.azure.com/api/RegisteredApplications/$($azureAppId)/Consent?onBehalfOfAll=true"
     for ($i = 0; $i -lt 20; $i++) {
         # try 20 times * 3 seconds = 1 minute
+        $token = [Microsoft.Azure.Commands.Common.Authentication.AzureSession]::Instance.AuthenticationFactory.Authenticate( `
+            $context.Account, $context.Environment, $context.Tenant.Id, $null, "Never", $null, "74658136-14ec-4630-ad9b-26e160ff0fc6")
+        if (!$token) {
+            throw "Failed to get auth token for $($context.Tenant.Id)."
+        }
         try {
-            $token = [Microsoft.Azure.Commands.Common.Authentication.AzureSession]::Instance.AuthenticationFactory.Authenticate( `
-                    $context.Account, $context.Environment, $context.Tenant.Id, $null, "Never", $null, "74658136-14ec-4630-ad9b-26e160ff0fc6")
-            if (!$token) {
-                throw "Failed to get auth token for $($context.Tenant.Id)."
-            }
             $header = @{
                 "Authorization"          = "Bearer $($token.AccessToken)"
                 "X-Requested-With"       = "XMLHttpRequest"
@@ -393,6 +474,48 @@ Function Add-AdminConsentGrant() {
         }
     }
     throw "Failed to grant consent for $($azureAppId)."
+}
+
+#*******************************************************************************************************
+# Add preauthorize application
+#*******************************************************************************************************
+Function Add-PreauthorizedApplication() {
+    Param(
+        $servicePrincipal,
+        [string] $azureAppObjectId,
+        [string] $azurePreAuthAppId,
+        [Microsoft.Azure.Commands.Profile.Models.Core.PSAzureContext] $context
+    )
+
+    $url = "https://graph.microsoft.com/beta/applications/" + $azureAppObjectId
+    for ($i = 0; $i -lt 3; $i++) {
+        $token = [Microsoft.Azure.Commands.Common.Authentication.AzureSession]::Instance.AuthenticationFactory.Authenticate( `
+            $context.Account, $context.Environment, $context.Tenant.Id, $null, "Never", $null, "https://graph.microsoft.com")
+        if (!$token) {
+            break
+        }
+        try {
+            $header = @{
+                "Authorization" = "Bearer $($token.AccessToken)"
+                "Content-Type"  = "application/json"
+            }
+            $preAuthBody = "{`"api`": {`"preAuthorizedApplications`": [{`"appId`": `"" + $azurePreAuthAppId + "`","
+            $preAuthBody += "`"permissionIds`": [" 
+            foreach ($permission in $servicePrincipal.Oauth2Permissions) {
+                $preAuthBody += "`"" + $permission.Id + "`","
+            }
+            $preAuthBody = $preAuthBody.Trim(',');
+            $preAuthBody += "]}]}}"
+            Invoke-RestMethod -Uri $url -Method PATCH -Body $preAuthBody -Headers $header
+            # success
+            return
+        }
+        catch {
+            Write-Verbose "$($_.Exception.Message) at $($url) - Retrying..."
+            Start-Sleep -s 3
+        }
+    }
+    Write-Verbose "Give up - manually pre-authorize application $($azurePreAuthAppId) in Expose Api..."
 }
 
 #*******************************************************************************************************

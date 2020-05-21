@@ -24,9 +24,7 @@ Azure Industrial IoT OPC UA Vault Service
 ### Tags
 
 * Certificates : Certificate services.
-* Distribution : Certificate CRL Distribution Point and Authority
-Information Access
-services.
+* Distribution : Certificate CRL Distribution Point and Authority Information Access services.
 * Requests : Certificate request services.
 * TrustGroups : Trust group services.
 * TrustLists : Trust lists services.
@@ -45,7 +43,7 @@ Certificate services.
 <a name="getissuercertificatechain"></a>
 #### Get Issuer CA Certificate chain.
 ```
-GET /v2/certificates/{serialNumber}
+GET /vault/v2/certificates/{serialNumber}
 ```
 
 
@@ -65,20 +63,16 @@ GET /v2/certificates/{serialNumber}
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="getissuercrlchain"></a>
 #### Get Issuer CA CRL chain.
 ```
-GET /v2/certificates/{serialNumber}/crl
+GET /vault/v2/certificates/{serialNumber}/crl
 ```
 
 
@@ -98,27 +92,21 @@ GET /v2/certificates/{serialNumber}/crl
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="distribution_resource"></a>
 ### Distribution
-Certificate CRL Distribution Point and Authority
-Information Access
-services.
+Certificate CRL Distribution Point and Authority Information Access services.
 
 
 <a name="getissuercrlchain"></a>
 #### Get Issuer CRL in CRL Distribution Endpoint.
 ```
-GET /v2/crl/{serialNumber}
+GET /vault/v2/crl/{serialNumber}
 ```
 
 
@@ -144,7 +132,7 @@ GET /v2/crl/{serialNumber}
 <a name="getissuercertificatechain"></a>
 #### Get Issuer Certificate for Authority Information Access endpoint.
 ```
-GET /v2/issuer/{serialNumber}
+GET /vault/v2/issuer/{serialNumber}
 ```
 
 
@@ -175,7 +163,7 @@ Certificate request services.
 <a name="listrequests"></a>
 #### Lists certificate requests.
 ```
-GET /v2/requests
+GET /vault/v2/requests
 ```
 
 
@@ -200,20 +188,16 @@ Get all certificate requests in paged form or continue a current listing or quer
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="startnewkeypairrequest"></a>
 #### Create a certificate request with a new key pair.
 ```
-PUT /v2/requests/keypair
+PUT /vault/v2/requests/keypair
 ```
 
 
@@ -241,24 +225,21 @@ The request is in the 'New' state after this call. Requires Writer or Manager ro
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="finishnewkeypairrequest"></a>
 #### Fetch certificate request result.
 ```
-GET /v2/requests/keypair/{requestId}
+GET /vault/v2/requests/keypair/{requestId}
 ```
 
 
@@ -282,20 +263,16 @@ Can be called in any state. Fetches private key in 'Completed' state. After a su
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="queryrequests"></a>
 #### Query for certificate requests.
 ```
-POST /v2/requests/query
+POST /vault/v2/requests/query
 ```
 
 
@@ -324,24 +301,21 @@ Get all certificate requests in paged form. The returned model can contain a lin
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="startsigningrequest"></a>
 #### Create a certificate request with a certificate signing request (CSR).
 ```
-PUT /v2/requests/sign
+PUT /vault/v2/requests/sign
 ```
 
 
@@ -369,24 +343,21 @@ The request is in the 'New' state after this call. Requires Writer or Manager ro
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="finishsigningrequest"></a>
 #### Fetch signing request results.
 ```
-GET /v2/requests/sign/{requestId}
+GET /vault/v2/requests/sign/{requestId}
 ```
 
 
@@ -410,20 +381,16 @@ Can be called in any state. After a successful fetch in 'Completed' state, the r
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="getrequest"></a>
 #### Get a specific certificate request.
 ```
-GET /v2/requests/{requestId}
+GET /vault/v2/requests/{requestId}
 ```
 
 
@@ -443,20 +410,16 @@ GET /v2/requests/{requestId}
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="deleterequest"></a>
 #### Delete request. Physically delete the request.
 ```
-DELETE /v2/requests/{requestId}
+DELETE /vault/v2/requests/{requestId}
 ```
 
 
@@ -478,17 +441,10 @@ By purging the request it is actually physically deleted from the database, incl
 |**200**|Success|No Content|
 
 
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
-
-
 <a name="acceptrequest"></a>
 #### Cancel request
 ```
-POST /v2/requests/{requestId}/accept
+POST /vault/v2/requests/{requestId}/accept
 ```
 
 
@@ -510,17 +466,10 @@ The request is in the 'Accepted' state after this call. Requires Writer role.
 |**200**|Success|No Content|
 
 
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
-
-
 <a name="approverequest"></a>
 #### Approve the certificate request.
 ```
-POST /v2/requests/{requestId}/approve
+POST /vault/v2/requests/{requestId}/approve
 ```
 
 
@@ -542,17 +491,10 @@ Validates the request with the application database. - If Approved: - New Key Pa
 |**200**|Success|No Content|
 
 
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
-
-
 <a name="rejectrequest"></a>
 #### Reject the certificate request.
 ```
-POST /v2/requests/{requestId}/reject
+POST /vault/v2/requests/{requestId}/reject
 ```
 
 
@@ -574,13 +516,6 @@ The request is in the 'Rejected' state after this call. Requires Approver role. 
 |**200**|Success|No Content|
 
 
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
-
-
 <a name="trustgroups_resource"></a>
 ### TrustGroups
 Trust group services.
@@ -589,7 +524,7 @@ Trust group services.
 <a name="listgroups"></a>
 #### Get information about all groups.
 ```
-GET /v2/groups
+GET /vault/v2/groups
 ```
 
 
@@ -614,20 +549,16 @@ A trust group has a root certificate which issues certificates to entities. Enti
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="creategroup"></a>
 #### Create new sub-group of an existing group.
 ```
-PUT /v2/groups
+PUT /vault/v2/groups
 ```
 
 
@@ -655,24 +586,21 @@ Requires manager role.
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="createroot"></a>
 #### Create new root group.
 ```
-PUT /v2/groups/root
+PUT /vault/v2/groups/root
 ```
 
 
@@ -700,24 +628,21 @@ Requires manager role.
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="updategroup"></a>
 #### Update group registration.
 ```
-POST /v2/groups/{groupId}
+POST /vault/v2/groups/{groupId}
 ```
 
 
@@ -746,19 +671,13 @@ Use this function with care and only if you are aware of the security implicatio
 * `application/json`
 * `text/json`
 * `application/*+json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `application/x-msgpack`
 
 
 <a name="getgroup"></a>
 #### Get group information.
 ```
-GET /v2/groups/{groupId}
+GET /vault/v2/groups/{groupId}
 ```
 
 
@@ -782,20 +701,16 @@ A trust group has a root certificate which issues certificates to entities. Enti
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="deletegroup"></a>
 #### Delete a group.
 ```
-DELETE /v2/groups/{groupId}
+DELETE /vault/v2/groups/{groupId}
 ```
 
 
@@ -817,17 +732,10 @@ After this operation the Issuer CA, CRLs and keys become inaccessible. Use this 
 |**200**|Success|No Content|
 
 
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
-
-
 <a name="renewissuercertificate"></a>
 #### Renew a group CA Certificate.
 ```
-POST /v2/groups/{groupId}/renew
+POST /vault/v2/groups/{groupId}/renew
 ```
 
 
@@ -845,13 +753,6 @@ POST /v2/groups/{groupId}/renew
 |**200**|Success|No Content|
 
 
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
-
-
 <a name="trustlists_resource"></a>
 ### TrustLists
 Trust lists services.
@@ -860,7 +761,7 @@ Trust lists services.
 <a name="listtrustedcertificates"></a>
 #### List trusted certificates
 ```
-GET /v2/trustlists/{entityId}
+GET /vault/v2/trustlists/{entityId}
 ```
 
 
@@ -886,20 +787,16 @@ Returns all certificates the entity should trust based on the applied trust conf
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="addtrustrelationship"></a>
 #### Add trust relationship
 ```
-PUT /v2/trustlists/{entityId}/{trustedEntityId}
+PUT /vault/v2/trustlists/{entityId}/{trustedEntityId}
 ```
 
 
@@ -922,17 +819,10 @@ Define trust between two entities. The entities are identifiers of application, 
 |**200**|Success|No Content|
 
 
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
-
-
 <a name="removetrustrelationship"></a>
 #### Remove a trust relationship
 ```
-DELETE /v2/trustlists/{entityId}/{untrustedEntityId}
+DELETE /vault/v2/trustlists/{entityId}/{untrustedEntityId}
 ```
 
 
@@ -953,13 +843,6 @@ Removes trust between two entities. The entities are identifiers of application,
 |HTTP Code|Description|Schema|
 |---|---|---|
 |**200**|Success|No Content|
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
 
 
 

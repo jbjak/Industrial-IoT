@@ -4,8 +4,11 @@
 // ------------------------------------------------------------
 
 namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
-    using Microsoft.Azure.IIoT.Http;
     using Microsoft.Azure.IIoT.OpcUa.Api.Vault.Models;
+    using Microsoft.Azure.IIoT.OpcUa.Api.Core.Models;
+    using Microsoft.Azure.IIoT.Http;
+    using Microsoft.Azure.IIoT.Serializers;
+    using Microsoft.Azure.IIoT.Serializers.NewtonSoft;
     using System;
     using System.Threading;
     using System.Threading.Tasks;
@@ -20,8 +23,10 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
         /// </summary>
         /// <param name="httpClient"></param>
         /// <param name="config"></param>
-        public VaultServiceClient(IHttpClient httpClient, IVaultConfig config) :
-            this(httpClient, config.OpcUaVaultServiceUrl, config.OpcUaVaultServiceResourceId) {
+        /// <param name="serializer"></param>
+        public VaultServiceClient(IHttpClient httpClient, IVaultConfig config,
+            ISerializer serializer) :
+            this(httpClient, config?.OpcUaVaultServiceUrl,serializer) {
         }
 
         /// <summary>
@@ -29,18 +34,22 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
         /// </summary>
         /// <param name="httpClient"></param>
         /// <param name="serviceUri"></param>
-        /// <param name="resourceId"></param>
-        public VaultServiceClient(IHttpClient httpClient, string serviceUri, string resourceId) {
-            _serviceUri = serviceUri ?? throw new ArgumentNullException(nameof(serviceUri),
+        /// <param name="serializer"></param>
+        public VaultServiceClient(IHttpClient httpClient, string serviceUri,
+            ISerializer serializer = null) {
+            if (string.IsNullOrWhiteSpace(serviceUri)) {
+                throw new ArgumentNullException(nameof(serviceUri),
                     "Please configure the Url of the vault micro service.");
+            }
+            _serviceUri = serviceUri.TrimEnd('/');
+            _serializer = serializer ?? new NewtonSoftJsonSerializer();
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _resourceId = resourceId;
         }
 
         /// <inheritdoc/>
         public async Task<string> GetServiceStatusAsync(CancellationToken ct) {
             var request = _httpClient.NewRequest($"{_serviceUri}/healthz",
-                _resourceId);
+                Resource.Platform);
             try {
                 var response = await _httpClient.GetAsync(request, ct).ConfigureAwait(false);
                 response.Validate();
@@ -54,16 +63,17 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
         /// <inheritdoc/>
         public async Task<TrustGroupListApiModel> ListGroupsAsync(string nextPageLink,
             int? pageSize, CancellationToken ct) {
-            var request = _httpClient.NewRequest($"{_serviceUri}/v2/groups", _resourceId);
+            var request = _httpClient.NewRequest($"{_serviceUri}/v2/groups", Resource.Platform);
             if (nextPageLink != null) {
                 request.AddHeader(HttpHeader.ContinuationToken, nextPageLink);
             }
             if (pageSize != null) {
                 request.AddHeader(HttpHeader.MaxItemCount, pageSize.ToString());
             }
+            _serializer.SetAcceptHeaders(request);
             var response = await _httpClient.GetAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<TrustGroupListApiModel>();
+            return _serializer.DeserializeResponse<TrustGroupListApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -73,10 +83,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(groupId));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/groups/{groupId}",
-                _resourceId);
+                Resource.Platform);
+            _serializer.SetAcceptHeaders(request);
             var response = await _httpClient.GetAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<TrustGroupRegistrationApiModel>();
+            return _serializer.DeserializeResponse<TrustGroupRegistrationApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -91,8 +102,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
             if (string.IsNullOrEmpty(groupId)) {
                 throw new ArgumentNullException(nameof(groupId));
             }
-            var request = _httpClient.NewRequest($"{_serviceUri}/v2/groups/{groupId}", _resourceId);
-            request.SetContent(model);
+            var request = _httpClient.NewRequest($"{_serviceUri}/v2/groups/{groupId}", Resource.Platform);
+            _serializer.SerializeToRequest(request, model);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
@@ -103,11 +114,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
             if (model == null) {
                 throw new ArgumentNullException(nameof(model));
             }
-            var request = _httpClient.NewRequest($"{_serviceUri}/v2/groups/root", _resourceId);
-            request.SetContent(model);
+            var request = _httpClient.NewRequest($"{_serviceUri}/v2/groups/root", Resource.Platform);
+            _serializer.SerializeToRequest(request, model);
             var response = await _httpClient.PutAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<TrustGroupRegistrationResponseApiModel>();
+            return _serializer.DeserializeResponse<TrustGroupRegistrationResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -116,11 +127,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
             if (model == null) {
                 throw new ArgumentNullException(nameof(model));
             }
-            var request = _httpClient.NewRequest($"{_serviceUri}/v2/groups", _resourceId);
-            request.SetContent(model);
+            var request = _httpClient.NewRequest($"{_serviceUri}/v2/groups", Resource.Platform);
+            _serializer.SerializeToRequest(request, model);
             var response = await _httpClient.PutAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<TrustGroupRegistrationResponseApiModel>();
+            return _serializer.DeserializeResponse<TrustGroupRegistrationResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -130,10 +141,10 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(groupId));
             }
             var request = _httpClient.NewRequest(
-                $"{_serviceUri}/v2/groups/{groupId}/renew", _resourceId);
+                $"{_serviceUri}/v2/groups/{groupId}/renew", Resource.Platform);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<X509CertificateApiModel>();
+            return _serializer.DeserializeResponse<X509CertificateApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -141,7 +152,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
             if (string.IsNullOrEmpty(groupId)) {
                 throw new ArgumentNullException(nameof(groupId));
             }
-            var request = _httpClient.NewRequest($"{_serviceUri}/v2/groups/{groupId}", _resourceId);
+            var request = _httpClient.NewRequest($"{_serviceUri}/v2/groups/{groupId}", Resource.Platform);
             var response = await _httpClient.DeleteAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
@@ -153,10 +164,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(serialNumber));
             }
             var request = _httpClient.NewRequest(
-                $"{_serviceUri}/v2/certificates/{serialNumber}", _resourceId);
+                $"{_serviceUri}/v2/certificates/{serialNumber}", Resource.Platform);
+            _serializer.SetAcceptHeaders(request);
             var response = await _httpClient.GetAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<X509CertificateChainApiModel>();
+            return _serializer.DeserializeResponse<X509CertificateChainApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -166,10 +178,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(serialNumber));
             }
             var request = _httpClient.NewRequest(
-                $"{_serviceUri}/v2/certificates/{serialNumber}/crls", _resourceId);
+                $"{_serviceUri}/v2/certificates/{serialNumber}/crls", Resource.Platform);
+            _serializer.SetAcceptHeaders(request);
             var response = await _httpClient.GetAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<X509CrlChainApiModel>();
+            return _serializer.DeserializeResponse<X509CrlChainApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -179,11 +192,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(model));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/requests/sign",
-                _resourceId);
-            request.SetContent(model);
+                Resource.Platform);
+            _serializer.SerializeToRequest(request, model);
             var response = await _httpClient.PutAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<StartSigningRequestResponseApiModel>();
+            return _serializer.DeserializeResponse<StartSigningRequestResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -193,10 +206,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(requestId));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/requests/sign/{requestId}",
-                _resourceId);
+                Resource.Platform);
+            _serializer.SetAcceptHeaders(request);
             var response = await _httpClient.GetAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<FinishSigningRequestResponseApiModel>();
+            return _serializer.DeserializeResponse<FinishSigningRequestResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -206,11 +220,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(model));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/requests/keypair",
-                _resourceId);
-            request.SetContent(model);
+                Resource.Platform);
+            _serializer.SerializeToRequest(request, model);
             var response = await _httpClient.PutAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<StartNewKeyPairRequestResponseApiModel>();
+            return _serializer.DeserializeResponse<StartNewKeyPairRequestResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -220,10 +234,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(requestId));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/requests/keypair/{requestId}",
-                _resourceId);
+                Resource.Platform);
+            _serializer.SetAcceptHeaders(request);
             var response = await _httpClient.GetAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<FinishNewKeyPairRequestResponseApiModel>();
+            return _serializer.DeserializeResponse<FinishNewKeyPairRequestResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -232,7 +247,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(requestId));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/requests/{requestId}/approve",
-                _resourceId);
+                Resource.Platform);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
@@ -243,7 +258,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(requestId));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/requests/{requestId}/reject",
-                _resourceId);
+                Resource.Platform);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
@@ -254,7 +269,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(requestId));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/requests/{requestId}/accept",
-                _resourceId);
+                Resource.Platform);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
@@ -265,7 +280,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(requestId));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/requests/{requestId}",
-                _resourceId);
+                Resource.Platform);
             var response = await _httpClient.DeleteAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
@@ -277,42 +292,44 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(requestId));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/requests/{requestId}",
-                _resourceId);
-            var response = await _httpClient.GetAsync(request, ct);
+                Resource.Platform);
+            _serializer.SetAcceptHeaders(request);
+            var response = await _httpClient.GetAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<CertificateRequestRecordApiModel>();
+            return _serializer.DeserializeResponse<CertificateRequestRecordApiModel>(response);
         }
 
         /// <inheritdoc/>
         public async Task<CertificateRequestQueryResponseApiModel> QueryRequestsAsync(
             CertificateRequestQueryRequestApiModel query, int? pageSize, CancellationToken ct) {
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/requests/query",
-                _resourceId);
+                Resource.Platform);
             if (pageSize != null) {
                 request.AddHeader(HttpHeader.MaxItemCount, pageSize.ToString());
             }
             if (query != null) {
-                request.SetContent(query);
+                _serializer.SerializeToRequest(request, query);
             }
-            var response = await _httpClient.PostAsync(request, ct);
+            var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<CertificateRequestQueryResponseApiModel>();
+            return _serializer.DeserializeResponse<CertificateRequestQueryResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
         public async Task<CertificateRequestQueryResponseApiModel> ListRequestsAsync(
             string nextPageLink, int? pageSize, CancellationToken ct) {
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/requests",
-                _resourceId);
+                Resource.Platform);
             if (nextPageLink != null) {
                 request.AddHeader(HttpHeader.ContinuationToken, nextPageLink);
             }
             if (pageSize != null) {
                 request.AddHeader(HttpHeader.MaxItemCount, pageSize.ToString());
             }
-            var response = await _httpClient.GetAsync(request, ct);
+            _serializer.SetAcceptHeaders(request);
+            var response = await _httpClient.GetAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<CertificateRequestQueryResponseApiModel>();
+            return _serializer.DeserializeResponse<CertificateRequestQueryResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -326,7 +343,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
             }
             var request = _httpClient.NewRequest(
                 $"{_serviceUri}/v2/trustlist/{entityId}/{trustedEntityId}",
-                _resourceId);
+                Resource.Platform);
             var response = await _httpClient.PutAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
@@ -338,16 +355,17 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
                 throw new ArgumentNullException(nameof(entityId));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/trustlist/{entityId}",
-                _resourceId);
+                Resource.Platform);
             if (nextPageLink != null) {
                 request.AddHeader(HttpHeader.ContinuationToken, nextPageLink);
             }
             if (pageSize != null) {
                 request.AddHeader(HttpHeader.MaxItemCount, pageSize.ToString());
             }
-            var response = await _httpClient.GetAsync(request, ct);
+            _serializer.SetAcceptHeaders(request);
+            var response = await _httpClient.GetAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<X509CertificateListApiModel>();
+            return _serializer.DeserializeResponse<X509CertificateListApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -361,13 +379,13 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Vault.Clients {
             }
             var request = _httpClient.NewRequest(
                 $"{_serviceUri}/v2/trustlist/{entityId}/{untrustedEntityId}",
-                _resourceId);
+                Resource.Platform);
             var response = await _httpClient.DeleteAsync(request, ct).ConfigureAwait(false);
             response.Validate();
         }
 
         private readonly IHttpClient _httpClient;
+        private readonly ISerializer _serializer;
         private readonly string _serviceUri;
-        private readonly string _resourceId;
     }
 }

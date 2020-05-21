@@ -6,7 +6,10 @@
     Deploys the Industrial IoT services dependencies and optionally micro services and UI to Azure.
 
  .PARAMETER type
-    The type of deployment (local, services, app, all)
+    The type of deployment (minimum, local, services, simulation, app, all)
+
+ .PARAMETER version
+    Set to "latest" or another mcr image tag to deploy - if not set deploys current master branch ("preview").
 
  .PARAMETER resourceGroupName
     Can be the name of an existing or a new resource group
@@ -44,10 +47,22 @@
  .PARAMETER environmentName
     The cloud environment to use (defaults to Azure Cloud).
 
+ .PARAMETER simulationProfile
+    If you are deploying a simulation, the simulation profile to use if not default.
+
+ .PARAMETER numberOfSimulationsPerEdge
+    Number of simulations to deploy per edge
+
+ .PARAMETER numberOfLinuxGateways
+    Number of linux gateways to deploy into the simulation
+
+ .PARAMETER numberOfWindowsGateways
+    Number of windows gateways to deploy into the simulation
 #>
 
 param(
-    [ValidateSet("local", "services", "app", "all")] [string] $type = "all",
+    [ValidateSet("minimum", "local", "services", "simulation", "app", "all")] [string] $type = "all",
+    [string] $version,
     [string] $applicationName,
     [string] $resourceGroupName,
     [string] $resourceGroupLocation,
@@ -57,6 +72,10 @@ param(
     [string] $aadApplicationName,
     [string] $acrRegistryName,
     [string] $acrSubscriptionName,
+    [string] $simulationProfile,
+    [int] $numberOfLinuxGateways = 0,
+    [int] $numberOfWindowsGateways = 0,
+    [int] $numberOfSimulationsPerEdge = 0,
     $aadConfig,
     $context = $null,
     [switch] $testAllDeploymentOptions,
@@ -73,8 +92,16 @@ Function Select-Context() {
         [Microsoft.Azure.Commands.Profile.Models.Core.PSAzureContext] $context
     )
 
-    $contextFile = Join-Path $script:ScriptDir ".user"
+    $rootDir = Get-RootFolder $script:ScriptDir
+    $contextFile = Join-Path $rootDir ".user"
     if (!$context) {
+        # Migrate .user file into root (next to .env)
+        if (!(Test-Path $contextFile)) {
+            $oldFile = Join-Path $script:ScriptDir ".user"
+            if (Test-Path $oldFile) {
+                Move-Item -Path $oldFile -Destination $contextFile
+            }
+        }
         if (Test-Path $contextFile) {
             $profile = Import-AzContext -Path $contextFile
             if (($null -ne $profile) `
@@ -123,7 +150,7 @@ Function Select-Context() {
             if (!$script:interactive) {
                 throw "Provide a subscription to use using -subscriptionId or -subscriptionName"
             }
-            Write-Host "Please choose a subscription from list list (using its Index):"
+            Write-Host "Please choose a subscription from this list (using its index):"
             $script:index = 0
             $subscriptions | Format-Table -AutoSize -Property `
                  @{Name="Index"; Expression = {($script:index++)}},`
@@ -159,10 +186,10 @@ Function Select-Context() {
     }
     # If file does not exist yet - ask
     if (!(Test-Path $contextFile) -and $script:interactive) {
-        $reply = Read-Host -Prompt "Save credentials in .user file [y/n]"
+        $reply = Read-Host -Prompt "To avoid logging in again next time, would you like to save your credentials? [y/n]"
         if ($reply -match "[yY]") {
-            Write-Host ".user file will be used as persisted context."
-            Write-Host "Enure you do not share it and do delete it when no longer needed."
+            Write-Host "Your Azure login context will be saved into a .user file in the root of the local repo."
+            Write-Host "Make sure you do not share it and delete it when no longer needed."
             $writeProfile = $true
         }
     }
@@ -172,6 +199,57 @@ Function Select-Context() {
 
     Write-Host "Azure subscription $($context.Subscription.Name) ($($context.Subscription.Id)) selected."
     return $context
+}
+
+#*******************************************************************************************************
+# Select repository and branch
+#*******************************************************************************************************
+Function Select-RepositoryAndBranch() {
+    
+    if ([string]::IsNullOrEmpty($script:repo)) {
+        # Try get repo name / TODO
+        $script:repo = "https://github.com/Azure/Industrial-IoT"
+    }
+
+    if ([string]::IsNullOrEmpty($script:branchName)) {
+        # Try get branch name
+        $script:branchName = $env:BUILD_SOURCEBRANCH
+        if (![string]::IsNullOrEmpty($script:branchName)) {
+            if ($script:branchName.StartsWith("refs/heads/")) {
+                $script:branchName = $script:branchName.Replace("refs/heads/", "")
+            }
+            else {
+                $script:branchName = $null
+            }
+        }
+        if ([string]::IsNullOrEmpty($script:branchName)) {
+            try {
+                $argumentList = @("rev-parse", "--abbrev-ref", "@{upstream}")
+                $symbolic = (& "git" $argumentList 2>&1 | ForEach-Object { "$_" });
+                if ($LastExitCode -ne 0) {
+                    throw "git $($argumentList) failed with $($LastExitCode)."
+                }
+                $remote = $symbolic.Split('/')[0]
+                $argumentList = @("remote", "get-url", $remote)
+                $giturl = (& "git" $argumentList 2>&1 | ForEach-Object { "$_" });
+                if ($LastExitCode -ne 0) {
+                    throw "git $($argumentList) failed with $($LastExitCode)."
+                }
+                $script:repo = $giturl
+                $script:branchName = $symbolic.Replace("$($remote)/", "")
+                if ($script:branchName -eq "HEAD") {
+                    Write-Warning "$($symbolic) is not a branch - using master."
+                    $script:branchName = "master"
+                }
+            }
+            catch {
+                throw "This script requires *git* to be installed and must be run from " + `
+                    "within a branch of the Industrial IoT repository. " + `
+                    "See the deployment documentation at https://github.com/Azure/Industrial-IoT " + `
+                    "to learn about other deployment options."
+            }
+        }
+    }
 }
 
 #*******************************************************************************************************
@@ -459,29 +537,22 @@ Function Get-EnvironmentVariables() {
     if (![string]::IsNullOrEmpty($script:resourceGroupName)) {
         Write-Output "PCS_RESOURCE_GROUP=$($script:resourceGroupName)"
     }
-
     $var = $deployment.Outputs["keyVaultUri"].Value
     if (![string]::IsNullOrEmpty($var)) {
         Write-Output "PCS_KEYVAULT_URL=$($var)"
     }
-    $var = $script:aadConfig.ServiceId
+    $var = $script:aadConfig.ClientId
     if (![string]::IsNullOrEmpty($var)) {
-        Write-Output "PCS_KEYVAULT_APPID=$($var)"
-        $var = $script:aadConfig.ServiceSecret
-        if (![string]::IsNullOrEmpty($var)) {
-            Write-Output "PCS_KEYVAULT_SECRET=$($var)"
-        }
-        $var = $deployment.Outputs["tenantId"].Value
-        if (![string]::IsNullOrEmpty($var)) {
-            Write-Output "PCS_AUTH_TENANT=$($var)"
-        }
+        Write-Output "PCS_AUTH_PUBLIC_CLIENT_APPID=$($var)"
     }
-
+    $var = $deployment.Outputs["tenantId"].Value
+    if (![string]::IsNullOrEmpty($var)) {
+        Write-Output "PCS_AUTH_TENANT=$($var)"
+    }
     $var = $deployment.Outputs["tsiUrl"].Value
     if (![string]::IsNullOrEmpty($var)) {
         Write-Output "PCS_TSI_URL=$($var)"
     }
-
     $var = $deployment.Outputs["serviceUrl"].Value
     if (![string]::IsNullOrEmpty($var)) {
         Write-Output "PCS_SERVICE_URL=$($var)"
@@ -517,7 +588,7 @@ Function Write-EnvironmentVariables() {
         $deployment
     )
 
-    # find the top most folder with docker-compose.yml in it
+    # find the top most folder
     $rootDir = Get-RootFolder $script:ScriptDir
 
     $writeFile = $false
@@ -568,59 +639,19 @@ Function New-Deployment() {
 
     $templateParameters = @{ }
 
-    if ([string]::IsNullOrEmpty($script:repo)) {
-        # Try get repo name / TODO
-        $script:repo = "https://github.com/Azure/Industrial-IoT"
-    }
-
-    if ([string]::IsNullOrEmpty($script:branchName)) {
-        # Try get branch name
-        $script:branchName = $env:BUILD_SOURCEBRANCH
-        if (![string]::IsNullOrEmpty($script:branchName)) {
-            if ($script:branchName.StartsWith("refs/heads/")) {
-                $script:branchName = $script:branchName.Replace("refs/heads/", "")
-            }
-            else {
-                $script:branchName = $null
-            }
-        }
-        if ([string]::IsNullOrEmpty($script:branchName)) {
-            try {
-                $argumentList = @("rev-parse", "--abbrev-ref", "@{upstream}")
-                $symbolic = (& "git" $argumentList 2>&1 | ForEach-Object { "$_" });
-                if ($LastExitCode -ne 0) {
-                    throw "git $($argumentList) failed with $($LastExitCode)."
-                }
-                $remote = $symbolic.Split('/')[0]
-                $argumentList = @("remote", "get-url", $remote)
-                $giturl = (& "git" $argumentList 2>&1 | ForEach-Object { "$_" });
-                if ($LastExitCode -ne 0) {
-                    throw "git $($argumentList) failed with $($LastExitCode)."
-                }
-                $script:repo = $giturl
-                $script:branchName = $symbolic.Replace("$($remote)/", "")
-                if ($script:branchName -eq "HEAD") {
-                    Write-Warning "$($symbolic) is not a branch - using master."
-                    $script:branchName = "master"
-                }
-            }
-            catch {
-                Write-Warning "$($_.Exception.Message).  Using master branch."
-                $script:repo = "https://github.com/Azure/Industrial-IoT"
-                $script:branchName = "master"
-            }
-        }
-    }
-
     Set-ResourceGroupTags -state "Deploying" -version $script:branchName
     Write-Host "Deployment will use '$($script:branchName)' branch in '$($script:repo)'."
     $templateParameters.Add("branchName", $script:branchName)
     $templateParameters.Add("repoUrl", $script:repo)
 
-    if ($script:type -eq "local") {
+    # Select an application name
+    if (($script:type -eq "local") -or ($script:type -eq "minimum") -or ($script:type -eq "simulation")) {
         if ([string]::IsNullOrEmpty($script:applicationName) `
                 -or ($script:applicationName -notmatch "^[a-z0-9-]*$")) {
-            $script:applicationName = $script:resourceGroupName
+            $script:applicationName = $script:resourceGroupName.Replace('_', '-')
+        }
+        if ($script:type -eq "minimum") {
+            $templateParameters.Add("deploymentLevel", "Minimum")
         }
     }
     else {
@@ -646,7 +677,25 @@ Function New-Deployment() {
                 $script:applicationName = $script:resourceGroupName
             }
         }
-
+        if (($script:type -eq "all") -or ($script:type -eq "app")) {
+            $templateParameters.Add("siteName", $script:applicationName)
+        }
+        if ($script:type -eq "services") {
+            $templateParameters.Add("serviceSiteName", $script:applicationName)
+        }
+    }
+    
+    # Select docker images to use
+    if (-not (($script:type -eq "local") -or ($script:type -eq "minimum"))) {
+        if ([string]::IsNullOrEmpty($script:version)) {
+            if ($script:branchName.StartsWith("release/")) {
+                $script:version = $script:branchName.Replace("release/", "")
+            }
+            else {
+                $script:version = "preview"
+            }
+        }
+        $templateParameters.Add("imagesTag", $script:version)
         $creds = Select-RegistryCredentials
         if ($creds) {
             $templateParameters.Add("dockerServer", $creds.dockerServer)
@@ -663,58 +712,71 @@ Function New-Deployment() {
             }
             $namespace = $namespace.Replace("_", "/").Substring(0, [Math]::Min($namespace.Length, 24))
             $templateParameters.Add("imagesNamespace", $namespace)
-            $templateParameters.Add("imagesTag", "latest")
-            Write-Host "Using latest $($namespace) images from $($creds.dockerServer)."
+            Write-Host "Using $($script:version) $($namespace) images from $($creds.dockerServer)."
         }
         else {
             $templateParameters.Add("dockerServer", "mcr.microsoft.com")
-            $templateParameters.Add("imagesTag", "preview")
-            Write-Host "Using preview images from mcr.microsoft.com."
+            Write-Host "Using $($script:version) images from mcr.microsoft.com."
         }
+    }
 
-        if ($script:type -eq "all") {
-            $templateParameters.Add("siteName", $script:applicationName)
+    # Configure simulation
+    if (($script:type -eq "all") -or ($script:type -eq "simulation")) {
+        if ([string]::IsNullOrEmpty($script:simulationProfile)) {
+            $templateParameters.Add("simulationProfile", "default")
+        }
+        else {
+            $templateParameters.Add("simulationProfile", $script:simulationProfile)
+        }
+        if ((-not $script:numberOfLinuxGateways) -or ($script:numberOfLinuxGateways -eq 0)) {
             $templateParameters.Add("numberOfLinuxGateways", 1)
+        }
+        else {
+            $templateParameters.Add("numberOfLinuxGateways", $script:numberOfLinuxGateways)
+        }
+        if ((-not $script:numberOfWindowsGateways) -or ($script:numberOfWindowsGateways -eq 0)) {
             $templateParameters.Add("numberOfWindowsGateways", 1)
+        }
+        else {
+            $templateParameters.Add("numberOfWindowsGateways", $script:numberOfWindowsGateways)
+        }
+        if ((-not $script:numberOfSimulationsPerEdge) -or ($script:numberOfSimulationsPerEdge -eq 0)) {
             $templateParameters.Add("numberOfSimulations", 1)
+        }
+        else {
+            $templateParameters.Add("numberOfSimulations", $script:numberOfSimulationsPerEdge)
+        }
 
-            # Get all vm skus available in the location and in the account
-            $availableVms = Get-AzComputeResourceSku | Where-Object {
-                ($_.ResourceType.Contains("virtualMachines")) -and `
-                ($_.Locations -icontains $script:resourceGroupLocation) -and `
-                ($_.Restrictions.Count -eq 0)
-            }
-            # Sort based on sizes and filter minimum requirements
-            $availableVmNames = $availableVms `
-                | Select-Object -ExpandProperty Name -Unique
-            $vmSizes = Get-AzVMSize $script:resourceGroupLocation `
-                | Where-Object { $availableVmNames -icontains $_.Name } `
-                | Where-Object {
-                    ($_.NumberOfCores -ge 2) -and `
-                    ($_.MemoryInMB -ge 8192) -and `
-                    ($_.OSDiskSizeInMB -ge 1047552) -and `
-                    ($_.ResourceDiskSizeInMB -gt 8192)
-                } `
-                | Sort-Object -Property `
-                    NumberOfCores,MemoryInMB,ResourceDiskSizeInMB,Name
-            # Pick top
-            if ($vmSizes.Count -ne 0) {
-                $vmSize = $vmSizes[0].Name
-                Write-Host "Using $($vmSize) as VM size for all edge simulation hosts..."
-                $templateParameters.Add("edgeVmSize", $vmSize)
-            }
+        # Get all vm skus available in the location and in the account
+        $availableVms = Get-AzComputeResourceSku | Where-Object {
+            ($_.ResourceType.Contains("virtualMachines")) -and `
+            ($_.Locations -icontains $script:resourceGroupLocation) -and `
+            ($_.Restrictions.Count -eq 0)
+        }
+        # Sort based on sizes and filter minimum requirements
+        $availableVmNames = $availableVms `
+            | Select-Object -ExpandProperty Name -Unique
+        $vmSizes = Get-AzVMSize $script:resourceGroupLocation `
+            | Where-Object { $availableVmNames -icontains $_.Name } `
+            | Where-Object {
+                ($_.NumberOfCores -ge 2) -and `
+                ($_.MemoryInMB -ge 8192) -and `
+                ($_.OSDiskSizeInMB -ge 1047552) -and `
+                ($_.ResourceDiskSizeInMB -gt 8192)
+            } `
+            | Sort-Object -Property `
+                NumberOfCores,MemoryInMB,ResourceDiskSizeInMB,Name
+        # Pick top
+        if ($vmSizes.Count -ne 0) {
+            $vmSize = $vmSizes[0].Name
+            Write-Host "Using $($vmSize) as VM size for all edge simulation hosts..."
+            $templateParameters.Add("edgeVmSize", $vmSize)
+        }
 
-            $adminUser = "sandboxuser"
-            $adminPassword = New-Password
-            $templateParameters.Add("edgePassword", $adminPassword)
-            $templateParameters.Add("edgeUserName", $adminUser)
-        }
-        if ($script:type -eq "app") {
-            $templateParameters.Add("siteName", $script:applicationName)
-        }
-        if ($script:type -eq "services") {
-            $templateParameters.Add("serviceSiteName", $script:applicationName)
-        }
+        $adminUser = "sandboxuser"
+        $adminPassword = New-Password
+        $templateParameters.Add("edgePassword", $adminPassword)
+        $templateParameters.Add("edgeUserName", $adminUser)
     }
 
     $aadAddReplyUrls = $false
@@ -738,26 +800,32 @@ Function New-Deployment() {
         $script:aadConfig = Get-Content -Raw -Path $script:aadConfig | ConvertFrom-Json
     }
 
-    if (![string]::IsNullOrEmpty($script:aadConfig.ServicePrincipalId)) {
-        $templateParameters.Add("servicePrincipalId", $script:aadConfig.ServicePrincipalId)
-    }
+    # Register registered aad applications
     if (![string]::IsNullOrEmpty($script:aadConfig.ServiceId)) {
         $templateParameters.Add("serviceAppId", $script:aadConfig.ServiceId)
     }
     if (![string]::IsNullOrEmpty($script:aadConfig.ServiceSecret)) {
         $templateParameters.Add("serviceAppSecret", $script:aadConfig.ServiceSecret)
     }
-    if (![string]::IsNullOrEmpty($script:aadConfig.ClientId)) {
-        $templateParameters.Add("clientAppId", $script:aadConfig.ClientId)
+    if (![string]::IsNullOrEmpty($script:aadConfig.Audience)) {
+        $templateParameters.Add("serviceAudience", $script:aadConfig.Audience)
     }
-    if (![string]::IsNullOrEmpty($script:aadConfig.ClientSecret)) {
-        $templateParameters.Add("clientAppSecret", $script:aadConfig.ClientSecret)
+    if (![string]::IsNullOrEmpty($script:aadConfig.ClientId)) {
+        $templateParameters.Add("publicClientAppId", $script:aadConfig.ClientId)
+    }
+    if (![string]::IsNullOrEmpty($script:aadConfig.WebAppId)) {
+        $templateParameters.Add("clientAppId", $script:aadConfig.WebAppId)
+    }
+    if (![string]::IsNullOrEmpty($script:aadConfig.WebAppSecret)) {
+        $templateParameters.Add("clientAppSecret", $script:aadConfig.WebAppSecret)
     }
     if (![string]::IsNullOrEmpty($script:aadConfig.Authority)) {
         $templateParameters.Add("authorityUri", $script:aadConfig.Authority)
     }
-    if (![string]::IsNullOrEmpty($script:aadConfig.Audience)) {
-        $templateParameters.Add("serviceAudience", $script:aadConfig.Audience)
+
+    # Register current aad user to access keyvault
+    if (![string]::IsNullOrEmpty($script:aadConfig.UserPrincipalId)) {
+        $templateParameters.Add("keyVaultPrincipalId", $script:aadConfig.UserPrincipalId)
     }
 
     # register providers
@@ -767,17 +835,16 @@ Function New-Deployment() {
 
     while ($true) {
         try {
-            Write-Host "Starting deployment..."
-
             if (![string]::IsNullOrEmpty($adminUser) -and ![string]::IsNullOrEmpty($adminPassword)) {
                 Write-Host
-                Write-Host "To troubleshoot simulation use the following User and Password to log into the VM's:"
+                Write-Host "The following User and Password can be used to log into deployed VM's:"
                 Write-Host
                 Write-Host $adminUser
                 Write-Host $adminPassword
                 Write-Host
             }
 
+            Write-Host "Starting deployment..."
             # Start the deployment
             $templateFilePath = Join-Path (Join-Path (Split-Path $ScriptDir) "templates") "azuredeploy.json"
             $deployment = New-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName `
@@ -797,7 +864,7 @@ Function New-Deployment() {
             $replyUrls = New-Object System.Collections.Generic.List[System.String]
             if ($aadAddReplyUrls) {
                 # retrieve existing urls
-                $app = Get-AzADApplication -ObjectId $aadConfig.ClientPrincipalId
+                $app = Get-AzADApplication -ObjectId $aadConfig.WebAppPrincipalId
                 if ($app.ReplyUrls -and ($app.ReplyUrls.Count -ne 0)) {
                     $replyUrls = $app.ReplyUrls;
                 }
@@ -808,10 +875,10 @@ Function New-Deployment() {
                 Write-Host "The deployed application can be found at:"
                 Write-Host $website
                 Write-Host
-                if (![string]::IsNullOrEmpty($script:aadConfig.ClientPrincipalId)) {
+                if (![string]::IsNullOrEmpty($script:aadConfig.WebAppPrincipalId)) {
                     if (!$aadAddReplyUrls) {
                         Write-Host "To be able to use the application you need to register the following"
-                        Write-Host "reply url for AAD application $($script:aadConfig.ClientPrincipalId):"
+                        Write-Host "reply url for AAD application $($script:aadConfig.WebAppPrincipalId):"
                         Write-Host "$($website)/signin-oidc"
                     }
                     else {
@@ -820,7 +887,7 @@ Function New-Deployment() {
                 }
             }
 
-            if ($aadAddReplyUrls -and ![string]::IsNullOrEmpty($script:aadConfig.ClientPrincipalId)) {
+            if ($aadAddReplyUrls -and ![string]::IsNullOrEmpty($script:aadConfig.WebAppPrincipalId)) {
                 $serviceUri = $deployment.Outputs["serviceUrl"].Value
 
                 if (![string]::IsNullOrEmpty($serviceUri)) {
@@ -829,6 +896,8 @@ Function New-Deployment() {
                     $replyUrls.Add($serviceUri + "/history/swagger/oauth2-redirect.html")
                     $replyUrls.Add($serviceUri + "/vault/swagger/oauth2-redirect.html")
                     $replyUrls.Add($serviceUri + "/publisher/swagger/oauth2-redirect.html")
+                    $replyUrls.Add($serviceUri + "/edge/publisher/swagger/oauth2-redirect.html")
+                    $replyUrls.Add($serviceUri + "/events/swagger/oauth2-redirect.html")
                 }
 
                 $replyUrls.Add("http://localhost:9080/twin/swagger/oauth2-redirect.html")
@@ -836,15 +905,17 @@ Function New-Deployment() {
                 $replyUrls.Add("http://localhost:9080/history/swagger/oauth2-redirect.html")
                 $replyUrls.Add("http://localhost:9080/vault/swagger/oauth2-redirect.html")
                 $replyUrls.Add("http://localhost:9080/publisher/swagger/oauth2-redirect.html")
+                $replyUrls.Add("http://localhost:9080/edge/publisher/swagger/oauth2-redirect.html")
+                $replyUrls.Add("http://localhost:9080/events/swagger/oauth2-redirect.html")
 
                 $replyUrls.Add("http://localhost:5000/signin-oidc")
                 $replyUrls.Add("https://localhost:5001/signin-oidc")
             }
 
             if ($aadAddReplyUrls) {
-                # register reply urls in client application registration
+                # register reply urls in web application registration
                 Write-Host
-                Write-Host "Registering reply urls for $($aadConfig.ClientPrincipalId)..."
+                Write-Host "Registering reply urls for $($aadConfig.WebAppPrincipalId)..."
 
                 try {
                     # assumes we are still connected
@@ -854,18 +925,18 @@ Function New-Deployment() {
                     # TODO
                     #    & (Join-Path $script:ScriptDir "aad-update.ps1") `
                     #        $context `
-                    #        -ObjectId $aadConfig.ClientPrincipalId -ReplyUrls $replyUrls
-                    Update-AzADApplication -ObjectId $aadConfig.ClientPrincipalId -ReplyUrl $replyUrls `
+                    #        -ObjectId $aadConfig.WebAppPrincipalId -ReplyUrls $replyUrls
+                    Update-AzADApplication -ObjectId $aadConfig.WebAppPrincipalId -ReplyUrl $replyUrls `
                         | Out-Null
 
-                    Write-Host "Reply urls registered in client app $($aadConfig.ClientPrincipalId)..."
+                    Write-Host "Reply urls registered in web app $($aadConfig.WebAppPrincipalId)..."
                     Write-Host
                 }
                 catch {
                     Write-Host $_.Exception.Message
                     Write-Host
                     Write-Host "Registering reply urls failed. Please add the following urls to"
-                    Write-Host "the client app '$($aadConfig.ClientPrincipalId)' manually:"
+                    Write-Host "the web app '$($aadConfig.WebAppPrincipalId)' manually:"
                     $replyUrls | ForEach-Object { Write-Host $_ }
                 }
             }
@@ -994,6 +1065,7 @@ $script:requiredProviders = @(
     "microsoft.containerregistry"
 )
 
+Select-RepositoryAndBranch
 Write-Host "Signing in ..."
 Write-Host
 Import-Module Az

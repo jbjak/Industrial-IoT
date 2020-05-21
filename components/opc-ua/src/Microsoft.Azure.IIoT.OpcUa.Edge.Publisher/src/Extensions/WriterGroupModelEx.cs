@@ -21,9 +21,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Publisher.Models {
             this WriterGroupJobModel model, string publisherId) {
             return new WriterGroupJobConfig {
                 BatchSize = model.Engine?.BatchSize,
+                BatchTriggerInterval = model.Engine?.BatchTriggerInterval,
                 PublisherId = publisherId,
                 DiagnosticsInterval = model.Engine?.DiagnosticsInterval,
-                WriterGroup = model.WriterGroup
+                WriterGroup = model.WriterGroup,
+                MaxMessageSize = model.Engine?.MaxMessageSize
             };
         }
     }

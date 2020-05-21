@@ -4,6 +4,11 @@
 // ------------------------------------------------------------
 
 namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
+    using Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Models;
+    using Microsoft.Azure.IIoT.Agent.Framework;
+    using Microsoft.Azure.IIoT.Agent.Framework.Models;
+    using Microsoft.Azure.IIoT.Module;
+    using Serilog;
     using System;
     using System.Collections.Generic;
     using System.IO;
@@ -11,12 +16,6 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
     using System.Security.Cryptography;
     using System.Threading;
     using System.Threading.Tasks;
-    using Microsoft.Azure.IIoT.Agent.Framework;
-    using Microsoft.Azure.IIoT.Agent.Framework.Models;
-    using Microsoft.Azure.IIoT.Module;
-    using Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Models;
-    using Microsoft.Azure.IIoT.OpcUa.Publisher.Models;
-    using Serilog;
 
     /// <summary>
     /// Job orchestrator the represents the legacy publishednodes.json with legacy command line arguments as job.
@@ -27,17 +26,21 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
         /// </summary>
         /// <param name="publishedNodesJobConverter">The converter to read the job from the specified file.</param>
         /// <param name="legacyCliModelProvider">The provider that provides the legacy command line arguments.</param>
+        /// <param name="agentConfigPriovider">The provider that provides the agent configuration.</param>
         /// <param name="jobSerializer">The serializer to (de)serialize job information.</param>
         /// <param name="logger">Logger to write log messages.</param>
         /// <param name="identity">Module's identity provider.</param>
 
-        public LegacyJobOrchestrator(PublishedNodesJobConverter publishedNodesJobConverter, 
-            ILegacyCliModelProvider legacyCliModelProvider, IJobSerializer jobSerializer, 
-            ILogger logger, IIdentity identity) {
+        public LegacyJobOrchestrator(PublishedNodesJobConverter publishedNodesJobConverter,
+            ILegacyCliModelProvider legacyCliModelProvider, IAgentConfigProvider agentConfigPriovider,
+            IJobSerializer jobSerializer, ILogger logger, IIdentity identity) {
             _publishedNodesJobConverter = publishedNodesJobConverter
                 ?? throw new ArgumentNullException(nameof(publishedNodesJobConverter));
-            _legacyCliModel = legacyCliModelProvider.LegacyCliModel 
+            _legacyCliModel = legacyCliModelProvider.LegacyCliModel
                     ?? throw new ArgumentNullException(nameof(legacyCliModelProvider));
+            _agentConfig = agentConfigPriovider.Config
+                    ?? throw new ArgumentNullException(nameof(agentConfigPriovider));
+
             _jobSerializer = jobSerializer ?? throw new ArgumentNullException(nameof(jobSerializer));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _identity = identity ?? throw new ArgumentNullException(nameof(identity));
@@ -48,8 +51,10 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
                 directory = Environment.CurrentDirectory;
             }
 
-            var file = Path.GetFileName(_legacyCliModel.PublishedNodesFile);
+            _availableJobs = new Queue<JobProcessingInstructionModel>();
+            _assignedJobs = new Dictionary<string, JobProcessingInstructionModel>();
 
+            var file = Path.GetFileName(_legacyCliModel.PublishedNodesFile);
             _fileSystemWatcher = new FileSystemWatcher(directory, file);
             _fileSystemWatcher.Changed += _fileSystemWatcher_Changed;
             _fileSystemWatcher.EnableRaisingEvents = true;
@@ -65,8 +70,17 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
         /// <param name="ct"></param>
         /// <returns></returns>
         public Task<JobProcessingInstructionModel> GetAvailableJobAsync(string workerId, JobRequestModel request, CancellationToken ct = default) {
-            _updated = false;
-            return Task.FromResult(_jobProcessingInstructionModel);
+            if (_assignedJobs.TryGetValue(workerId, out var job)) {
+                return Task.FromResult(job);
+            }
+            if (_availableJobs.Count > 0 && (job = _availableJobs.Dequeue()) != null) {
+                _assignedJobs[workerId] = job;
+            }
+            else {
+                _updated = false;
+            }
+
+            return Task.FromResult(job);
         }
 
         /// <summary>
@@ -81,29 +95,25 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
             HeartbeatResultModel heartbeatResultModel;
 
             if (_updated && heartbeat.Job != null) {
-                _updated = false;
+                if (_availableJobs.Count == 0) {
+                    _updated = false;
+                }
 
-                heartbeatResultModel = new HeartbeatResultModel {HeartbeatInstruction = HeartbeatInstruction.CancelProcessing, LastActiveHeartbeat = DateTime.UtcNow, UpdatedJob = _jobProcessingInstructionModel};
+                heartbeatResultModel = new HeartbeatResultModel {
+                    HeartbeatInstruction = HeartbeatInstruction.CancelProcessing,
+                    LastActiveHeartbeat = DateTime.UtcNow,
+                    UpdatedJob = _assignedJobs.TryGetValue(heartbeat.Worker.WorkerId, out var job) ? job : null
+                };
             }
             else {
-                heartbeatResultModel = new HeartbeatResultModel {HeartbeatInstruction = HeartbeatInstruction.Keep, LastActiveHeartbeat = DateTime.UtcNow, UpdatedJob = null};
+                heartbeatResultModel = new HeartbeatResultModel {
+                    HeartbeatInstruction = HeartbeatInstruction.Keep,
+                    LastActiveHeartbeat = DateTime.UtcNow,
+                    UpdatedJob = null
+                };
             }
 
             return Task.FromResult(heartbeatResultModel);
-        }
-
-        private WriterGroupJobModel Flatten(IEnumerable<WriterGroupJobModel> writerGroupJobModels) {
-            if (writerGroupJobModels.Count() == 1) {
-                return writerGroupJobModels.Single();
-            }
-
-            // we use the first item in as template and add the DataSet writers of the subsequent jobs
-            var writerGroupTemplate = writerGroupJobModels.First().WriterGroup.Clone();
-            writerGroupTemplate.DataSetWriters = writerGroupJobModels.SelectMany(s => s.WriterGroup.DataSetWriters).ToList();
-
-            var mergedModel = new WriterGroupJobModel {ConnectionString = null, Engine = writerGroupJobModels.First().Engine, MessagingMode = writerGroupJobModels.First().MessagingMode, WriterGroup = writerGroupTemplate};
-
-            return mergedModel;
         }
 
         private void _fileSystemWatcher_Changed(object sender, FileSystemEventArgs e) {
@@ -120,42 +130,47 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
 
         private void RefreshJobFromFile() {
             var retryCount = 3;
-            var jobId = "LegacyPublisher_" + _identity.DeviceId + "_" + _identity.ModuleId;
             while (true) {
                 try {
                     var currentFileHash = GetChecksum(_legacyCliModel.PublishedNodesFile);
-
+                    var availableJobs = new Queue<JobProcessingInstructionModel>();
                     if (currentFileHash != _lastKnownFileHash) {
                         _logger.Information("File {publishedNodesFile} has changed, reloading...", _legacyCliModel.PublishedNodesFile);
                         _lastKnownFileHash = currentFileHash;
 
                         using (var reader = new StreamReader(_legacyCliModel.PublishedNodesFile)) {
-                            var jobs = _publishedNodesJobConverter.Read(reader, _legacyCliModel);
-                            var flattened = Flatten(jobs);
-                            flattened.WriterGroup.DataSetWriters.ForEach(d => {
-                                d.DataSet.ExtensionFields ??= new Dictionary<string, string>();
-                                d.DataSet.ExtensionFields["PublisherId"] = jobId;
-                                d.DataSet.ExtensionFields["DataSetWriterId"] = d.DataSetWriterId;
-                            });
-                            var serializedJob = _jobSerializer.SerializeJobConfiguration(flattened, out var jobConfigurationType);
 
-                            _jobProcessingInstructionModel = new JobProcessingInstructionModel {
-                                Job = new JobInfoModel {
-                                    Demands = new List<DemandModel>(),
-                                    Id = jobId,
-                                    JobConfiguration = serializedJob,
-                                    JobConfigurationType = jobConfigurationType,
-                                    LifetimeData = new JobLifetimeDataModel(),
-                                    Name = jobId,
-                                    RedundancyConfig = new RedundancyConfigModel {DesiredActiveAgents = 1, DesiredPassiveAgents = 0}
-                                },
-                                ProcessMode = ProcessMode.Active
-                            };
-                            
-                            _updated = true;
+                            var jobs = _publishedNodesJobConverter.Read(reader, _legacyCliModel);
+                            foreach (var job in jobs) {
+                                var jobId = $"LegacyPublisher_{_identity.DeviceId}_{_identity.ModuleId}";
+                                job.WriterGroup.DataSetWriters.ForEach(d => {
+                                    d.DataSet.ExtensionFields ??= new Dictionary<string, string>();
+                                    d.DataSet.ExtensionFields["PublisherId"] = jobId;
+                                    d.DataSet.ExtensionFields["DataSetWriterId"] = d.DataSetWriterId;
+                                });
+                                var serializedJob = _jobSerializer.SerializeJobConfiguration(job, out var jobConfigurationType);
+
+                                availableJobs.Enqueue(
+                                    new JobProcessingInstructionModel {
+                                        Job = new JobInfoModel {
+                                            Demands = new List<DemandModel>(),
+                                            Id = jobId,
+                                            JobConfiguration = serializedJob,
+                                            JobConfigurationType = jobConfigurationType,
+                                            LifetimeData = new JobLifetimeDataModel(),
+                                            Name = jobId,
+                                            RedundancyConfig = new RedundancyConfigModel { DesiredActiveAgents = 1, DesiredPassiveAgents = 0 }
+                                        },
+                                        ProcessMode = ProcessMode.Active
+                                    });
+                            }
                         }
                     }
 
+                    _agentConfig.MaxWorkers = availableJobs.Count;
+                    _availableJobs = availableJobs;
+                    _assignedJobs.Clear();
+                    _updated = true;
                     break;
                 }
                 catch (IOException ex) {
@@ -175,11 +190,13 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
         private readonly FileSystemWatcher _fileSystemWatcher;
         private readonly IJobSerializer _jobSerializer;
         private readonly LegacyCliModel _legacyCliModel;
+        private readonly AgentConfigModel _agentConfig;
         private readonly IIdentity _identity;
         private readonly ILogger _logger;
 
         private readonly PublishedNodesJobConverter _publishedNodesJobConverter;
-        private JobProcessingInstructionModel _jobProcessingInstructionModel;
+        private Queue<JobProcessingInstructionModel> _availableJobs;
+        private readonly Dictionary<string, JobProcessingInstructionModel> _assignedJobs;
         private string _lastKnownFileHash;
         private bool _updated;
     }

@@ -9,8 +9,10 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Twin.History {
     using Microsoft.Azure.IIoT.OpcUa.Twin.Models;
     using Microsoft.Azure.IIoT.OpcUa.Core.Models;
     using Microsoft.Azure.IIoT.OpcUa.Twin;
-    using Newtonsoft.Json.Linq;
+    using Microsoft.Azure.IIoT.Serializers;
+    using Microsoft.Azure.IIoT.Module;
     using System;
+    using System.Net;
     using System.Threading.Tasks;
 
     public interface ITestModule {
@@ -19,6 +21,16 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Twin.History {
         /// Endpoint
         /// </summary>
         EndpointModel Endpoint { get; set; }
+    }
+
+    /// <summary>
+    /// Test identity
+    /// </summary>
+    public sealed  class TestIdentity : IIdentity {
+        public string Gateway => Dns.GetHostName();
+        public string DeviceId => Gateway;
+        public string ModuleId => "TestModule";
+        public string SiteId => "TestSite";
     }
 
     /// <summary>
@@ -102,20 +114,20 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Twin.History {
         }
 
         /// <inheritdoc/>
-        public Task<HistoryReadResultModel<JToken>> HistoryReadAsync(
-            string endpointId, HistoryReadRequestModel<JToken> request) {
+        public Task<HistoryReadResultModel<VariantValue>> HistoryReadAsync(
+            string endpointId, HistoryReadRequestModel<VariantValue> request) {
             return _history.HistoryReadAsync(Endpoint, request);
         }
 
         /// <inheritdoc/>
-        public Task<HistoryReadNextResultModel<JToken>> HistoryReadNextAsync(
+        public Task<HistoryReadNextResultModel<VariantValue>> HistoryReadNextAsync(
             string endpointId, HistoryReadNextRequestModel request) {
             return _history.HistoryReadNextAsync(Endpoint, request);
         }
 
         /// <inheritdoc/>
         public Task<HistoryUpdateResultModel> HistoryUpdateAsync(
-            string endpointId, HistoryUpdateRequestModel<JToken> request) {
+            string endpointId, HistoryUpdateRequestModel<VariantValue> request) {
             return _history.HistoryUpdateAsync(Endpoint, request);
         }
 

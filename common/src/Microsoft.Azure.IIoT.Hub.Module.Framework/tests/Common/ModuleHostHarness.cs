@@ -12,7 +12,6 @@ namespace Microsoft.Azure.IIoT.Module.Framework.Hosting {
     using Microsoft.Azure.IIoT.Module.Framework.Services;
     using Microsoft.Azure.IIoT.Utils;
     using Autofac;
-    using AutofacSerilogIntegration;
     using System;
     using System.Collections.Generic;
     using System.Text;
@@ -50,12 +49,12 @@ namespace Microsoft.Azure.IIoT.Module.Framework.Hosting {
                     var edge = moduleContainer.Resolve<IModuleHost>();
 
                     // Act
-                    await edge.StartAsync("testType", "TestSite", "MS", null);
+                    await edge.StartAsync("testType", "TestSite", "MS", "1.2.3", null);
                     twin = await services.GetAsync(deviceId, moduleId);
 
                     // Assert
                     Assert.NotEqual(etag, twin.Etag);
-                    Assert.Equal("connected", twin.ConnectionState);
+                    Assert.Equal("Connected", twin.ConnectionState);
                     Assert.Equal("testType", twin.Properties.Reported[TwinProperty.Type]);
                     Assert.Equal("TestSite", twin.Properties.Reported[TwinProperty.SiteId]);
                     etag = twin.Etag;
@@ -63,23 +62,19 @@ namespace Microsoft.Azure.IIoT.Module.Framework.Hosting {
                     await test(deviceId, moduleId, hubContainer);
 
                     twin = await services.GetAsync(deviceId, moduleId);
-                    Assert.Equal("testType", twin.Properties.Reported[TwinProperty.Type]);
-                    Assert.Equal("TestSite", twin.Properties.Reported[TwinProperty.SiteId]);
+                    Assert.True(twin.Properties.Reported[TwinProperty.Type] == "testType");
+                    Assert.True("TestSite" == twin.Properties.Reported[TwinProperty.SiteId]);
                     etag = twin.Etag;
 
                     // Act
                     await edge.StopAsync();
                     twin = await services.GetAsync(deviceId, moduleId);
 
-                    // Assert
-                    Assert.False((bool)twin.Properties.Reported[TwinProperty.Connected]);
-
                     // TODO : Fix cleanup!!!
 
-                    // TODO :Assert.NotEqual("testType", twin.Properties.Reported[TwinProperty.kType]);
-                    // TODO :Assert.NotEqual("TestSite", twin.Properties.Reported[TwinProperty.kSiteId]);
-                    // TODO :Assert.Equal("disconnected", twin.ConnectionState);
-                    Assert.NotEqual(etag, twin.Etag);
+                    // TODO :Assert.True("testType" != twin.Properties.Reported[TwinProperty.kType]);
+                    // TODO :Assert.True("TestSite" != twin.Properties.Reported[TwinProperty.kSiteId]);
+                    Assert.Equal("Disconnected", twin.ConnectionState);
                 }
             }
         }
@@ -89,7 +84,6 @@ namespace Microsoft.Azure.IIoT.Module.Framework.Hosting {
                 ConnectionString.CreateServiceConnectionString(
                     "test.test.org", "iothubowner", Convert.ToBase64String(
                         Encoding.UTF8.GetBytes(Guid.NewGuid().ToString()))).ToString();
-            public string IoTHubResourceId => null;
         }
 
         public class TestModuleConfig : IModuleConfig {
@@ -106,6 +100,8 @@ namespace Microsoft.Azure.IIoT.Module.Framework.Hosting {
 
             public TransportOption Transport => TransportOption.Any;
 
+            public bool EnableMetrics => false;
+
             private readonly DeviceModel _device;
         }
 
@@ -115,7 +111,7 @@ namespace Microsoft.Azure.IIoT.Module.Framework.Hosting {
         /// <returns></returns>
         private IContainer CreateHubContainer() {
             var builder = new ContainerBuilder();
-            builder.RegisterLogger();
+            builder.AddDiagnostics();
             builder.RegisterModule<IoTHubMockService>();
             builder.RegisterType<TestIoTHubConfig>()
                 .AsImplementedInterfaces();
@@ -132,7 +128,7 @@ namespace Microsoft.Azure.IIoT.Module.Framework.Hosting {
         private IContainer CreateModuleContainer(IIoTHubTwinServices hub, DeviceModel device,
             IEnumerable<object> controllers) {
             var builder = new ContainerBuilder();
-            builder.RegisterLogger();
+            builder.AddDiagnostics();
             builder.RegisterInstance(hub)
                 .AsImplementedInterfaces().ExternallyOwned();
             builder.RegisterInstance(new TestModuleConfig(device))

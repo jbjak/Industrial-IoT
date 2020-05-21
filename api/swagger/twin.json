@@ -30,10 +30,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -60,14 +64,7 @@
               "$ref": "#/definitions/BrowseResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "get": {
         "tags": [
@@ -77,7 +74,10 @@
         "description": "Browse the set of unique hierarchically referenced target nodes on the endpoint. The endpoint must be activated and connected and the module client and server must trust each other. The root node id to browse from can be provided as part of the query parameters. If it is not provided, the RootFolder node is browsed. Note that this is the same as the POST method with the model containing the node id and the targetNodesOnly flag set to true.",
         "operationId": "GetSetOfUniqueNodes",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -101,14 +101,7 @@
               "$ref": "#/definitions/BrowseResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/twin/v2/browse/{endpointId}/next": {
@@ -123,10 +116,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -153,14 +150,7 @@
               "$ref": "#/definitions/BrowseNextResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "get": {
         "tags": [
@@ -170,7 +160,10 @@
         "description": "Browse the next set of unique hierarchically referenced target nodes on the endpoint. The endpoint must be activated and connected and the module client and server must trust each other. Note that this is the same as the POST method with the model containing the continuation token and the targetNodesOnly flag set to true.",
         "operationId": "GetNextSetOfUniqueNodes",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -196,13 +189,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "continuationToken"
         }
@@ -220,10 +206,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -250,14 +240,7 @@
               "$ref": "#/definitions/BrowsePathResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/twin/v2/call/{endpointId}/metadata": {
@@ -272,10 +255,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -302,14 +289,7 @@
               "$ref": "#/definitions/MethodMetadataResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/twin/v2/call/{endpointId}": {
@@ -324,10 +304,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -354,14 +338,7 @@
               "$ref": "#/definitions/MethodCallResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/twin/v2/read/{endpointId}": {
@@ -376,10 +353,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -406,14 +387,7 @@
               "$ref": "#/definitions/ValueReadResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "get": {
         "tags": [
@@ -423,7 +397,10 @@
         "description": "Get a variable node's value using its node id. The endpoint must be activated and connected and the module client and server must trust each other.",
         "operationId": "GetValue",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -448,14 +425,7 @@
               "$ref": "#/definitions/ValueReadResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/twin/v2/read/{endpointId}/attributes": {
@@ -470,10 +440,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -500,14 +474,7 @@
               "$ref": "#/definitions/ReadResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/twin/v2/write/{endpointId}": {
@@ -522,10 +489,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -552,14 +523,7 @@
               "$ref": "#/definitions/ValueWriteResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/twin/v2/write/{endpointId}/attributes": {
@@ -574,10 +538,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -604,14 +572,7 @@
               "$ref": "#/definitions/WriteResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     }
   },
@@ -753,7 +714,7 @@
       "type": "object",
       "properties": {
         "nodeId": {
-          "description": "Node to browse.\r\n(default: RootFolder).",
+          "description": "Node to browse.\r\n(defaults to root folder).",
           "type": "string"
         },
         "direction": {
@@ -768,7 +729,6 @@
         },
         "noSubtypes": {
           "description": "Whether to include subtypes of the reference type.\r\n(default is false)",
-          "default": false,
           "type": "boolean"
         },
         "maxReferencesToReturn": {
@@ -778,12 +738,10 @@
         },
         "targetNodesOnly": {
           "description": "Whether to collapse all references into a set of\r\nunique target nodes and not show reference\r\ninformation.\r\n(default is false)",
-          "default": false,
           "type": "boolean"
         },
         "readVariableValues": {
           "description": "Whether to read variable values on target nodes.\r\n(default is false)",
-          "default": false,
           "type": "boolean"
         },
         "nodeClassFilter": {
@@ -809,6 +767,24 @@
         },
         "header": {
           "$ref": "#/definitions/RequestHeaderApiModel"
+        }
+      }
+    },
+    "ServiceResultApiModel": {
+      "description": "Service result",
+      "type": "object",
+      "properties": {
+        "statusCode": {
+          "format": "int64",
+          "description": "Error code - if null operation succeeded.",
+          "type": "integer"
+        },
+        "errorMessage": {
+          "description": "Error message in case of error or null.",
+          "type": "string"
+        },
+        "diagnostics": {
+          "description": "Additional diagnostics information"
         }
       }
     },
@@ -943,6 +919,32 @@
           "description": "Browse name",
           "type": "string"
         },
+        "value": {
+          "description": "Value of variable or default value of the\r\nsubtyped variable in case node is a variable\r\ntype, otherwise null."
+        },
+        "sourcePicoseconds": {
+          "format": "int32",
+          "description": "Pico seconds part of when value was read at source.",
+          "type": "integer"
+        },
+        "sourceTimestamp": {
+          "format": "date-time",
+          "description": "Timestamp of when value was read at source.",
+          "type": "string"
+        },
+        "serverPicoseconds": {
+          "format": "int32",
+          "description": "Pico seconds part of when value was read at server.",
+          "type": "integer"
+        },
+        "serverTimestamp": {
+          "format": "date-time",
+          "description": "Timestamp of when value was read at server.",
+          "type": "string"
+        },
+        "errorInfo": {
+          "$ref": "#/definitions/ServiceResultApiModel"
+        },
         "accessRestrictions": {
           "$ref": "#/definitions/NodeAccessRestrictions"
         },
@@ -1008,9 +1010,6 @@
           "description": "Minimum sampling interval for the variable\r\nvalue, otherwise null if not a variable node.\r\n(default: null)",
           "type": "number"
         },
-        "value": {
-          "description": "Value of variable or default value of the\r\nsubtyped variable in case node is a variable\r\ntype, otherwise null."
-        },
         "inverseName": {
           "description": "Inverse name of the reference if the node is\r\na reference type, otherwise null.",
           "type": "string"
@@ -1062,24 +1061,6 @@
         }
       }
     },
-    "ServiceResultApiModel": {
-      "description": "Service result",
-      "type": "object",
-      "properties": {
-        "statusCode": {
-          "format": "int64",
-          "description": "Error code - if null operation succeeded.",
-          "type": "integer"
-        },
-        "errorMessage": {
-          "description": "Error message in case of error or null.",
-          "type": "string"
-        },
-        "diagnostics": {
-          "description": "Additional diagnostics information"
-        }
-      }
-    },
     "BrowseResponseApiModel": {
       "description": "browse response model",
       "type": "object",
@@ -1116,17 +1097,14 @@
         },
         "abort": {
           "description": "Whether to abort browse and release.\r\n(default: false)",
-          "default": false,
           "type": "boolean"
         },
         "targetNodesOnly": {
           "description": "Whether to collapse all references into a set of\r\nunique target nodes and not show reference\r\ninformation.\r\n(default is false)",
-          "default": false,
           "type": "boolean"
         },
         "readVariableValues": {
           "description": "Whether to read variable values on target nodes.\r\n(default is false)",
-          "default": false,
           "type": "boolean"
         },
         "header": {
@@ -1162,7 +1140,7 @@
       "type": "object",
       "properties": {
         "nodeId": {
-          "description": "Node to browse from.\r\n(default: RootFolder).",
+          "description": "Node to browse from.\r\n(defaults to root folder).",
           "type": "string"
         },
         "browsePaths": {
@@ -1177,7 +1155,6 @@
         },
         "readVariableValues": {
           "description": "Whether to read variable values on target nodes.\r\n(default is false)",
-          "default": false,
           "type": "boolean"
         },
         "header": {
@@ -1340,7 +1317,7 @@
           }
         },
         "objectBrowsePath": {
-          "description": "An optional component path from the node identified by\r\nObjectId to the actual object or objectType node.\r\nIf ObjectId is null, the root node (i=84) is used.",
+          "description": "An optional component path from the node identified by\r\nObjectId to the actual object or objectType node.\r\nIf ObjectId == null, the root node (i=84) is used.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1630,14 +1607,11 @@
     }
   },
   "securityDefinitions": {
-    "oauth2": {
-      "type": "oauth2",
-      "flow": "implicit",
-      "authorizationUrl": "https://login.microsoftonline.com/6e660ce4-d51a-4585-80c6-58035e212354/oauth2/authorize",
-      "scopes": {
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication": "Access http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication operations"
-      },
-      "description": "Implicit oauth2 token flow."
+    "bearer": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "Authorization token in the form of 'bearer <token>'"
     }
   },
   "tags": [

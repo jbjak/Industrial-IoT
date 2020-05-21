@@ -7,8 +7,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Deploy {
     using Microsoft.Azure.IIoT.Deploy;
     using Microsoft.Azure.IIoT.Hub;
     using Microsoft.Azure.IIoT.Hub.Models;
-    using Newtonsoft.Json;
-    using Newtonsoft.Json.Linq;
+    using Microsoft.Azure.IIoT.Hub.Services;
+    using Microsoft.Azure.IIoT.Serializers;
     using Serilog;
     using System;
     using System.Collections.Generic;
@@ -24,11 +24,13 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Deploy {
         /// </summary>
         /// <param name="service"></param>
         /// <param name="config"></param>
+        /// <param name="serializer"></param>
         /// <param name="logger"></param>
         public IoTHubDiscovererDeployment(IIoTHubConfigurationServices service,
-            IContainerRegistryConfig config, ILogger logger) {
+            IContainerRegistryConfig config, IJsonSerializer serializer, ILogger logger) {
             _service = service ?? throw new ArgumentNullException(nameof(service));
             _config = config ?? throw new ArgumentNullException(nameof(service));
+            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -41,7 +43,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Deploy {
                     ModulesContent = CreateLayeredDeployment(true)
                 },
                 SchemaVersion = kDefaultSchemaVersion,
-                TargetCondition = $"tags.__type__ = '{IdentityType.Gateway}' AND tags.os = 'Linux'",
+                TargetCondition = IoTHubEdgeBaseDeployment.TargetCondition +
+                    " AND tags.os = 'Linux'",
                 Priority = 1
             }, true);
 
@@ -51,7 +54,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Deploy {
                     ModulesContent = CreateLayeredDeployment(false)
                 },
                 SchemaVersion = kDefaultSchemaVersion,
-                TargetCondition = $"tags.__type__ = '{IdentityType.Gateway}' AND tags.os = 'Windows'",
+                TargetCondition = IoTHubEdgeBaseDeployment.TargetCondition +
+                    " AND tags.os = 'Windows'",
                 Priority = 1
             }, true);
         }
@@ -86,25 +90,28 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Deploy {
             string createOptions;
             if (isLinux) {
                 // Linux
-                createOptions = @"
-                {
-                    ""NetworkingConfig"":{
-                        ""EndpointsConfig"": {
-                            ""host"": {
+                createOptions = _serializer.SerializeToString(new {
+                    NetworkingConfig = new {
+                        EndpointsConfig = new {
+                            host = new {
                             }
                         }
                     },
-                    ""HostConfig"": {
-                        ""NetworkMode"": ""host"",
-                        ""CapAdd"": [ ""NET_ADMIN"" ]
-                    }
-                }";
+                    HostConfig = new {
+                        NetworkMode = "host",
+                        CapAdd = new[] { "NET_ADMIN" }
+                    },
+                    Hostname = "discovery"
+                });
             }
             else {
                 // Windows
-                createOptions = "{}";
+                createOptions = _serializer.SerializeToString(new {
+                    User = "ContainerAdministrator",
+                    Hostname = "discovery"
+                });
             }
-            createOptions = JObject.Parse(createOptions).ToString(Formatting.None).Replace("\"", "\\\"");
+            createOptions = createOptions.Replace("\"", "\\\"");
 
             var server = string.IsNullOrEmpty(_config.DockerServer) ?
                 "mcr.microsoft.com" : _config.DockerServer;
@@ -113,7 +120,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Deploy {
             var version = _config.ImagesTag ?? "latest";
             var image = $"{server}/{ns}iotedge/discovery:{version}";
 
-            _logger.Information("Updating discovery module deployment with image {image}", image);
+            _logger.Information("Updating discovery module deployment with image {image} for {os}",
+                image, isLinux ? "Linux" : "Windows");
 
             // Return deployment modules object
             var content = @"
@@ -135,12 +143,13 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Deploy {
                     ""properties.desired.routes.upstream"": ""FROM /messages/* INTO $upstream""
                 }
             }";
-            return JsonConvertEx.DeserializeObject<IDictionary<string, IDictionary<string, object>>>(content);
+            return _serializer.Deserialize<IDictionary<string, IDictionary<string, object>>>(content);
         }
 
         private const string kDefaultSchemaVersion = "1.0";
         private readonly IIoTHubConfigurationServices _service;
         private readonly IContainerRegistryConfig _config;
+        private readonly IJsonSerializer _serializer;
         private readonly ILogger _logger;
     }
 }

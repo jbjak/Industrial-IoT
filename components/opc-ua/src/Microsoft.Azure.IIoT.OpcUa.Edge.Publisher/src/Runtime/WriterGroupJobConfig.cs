@@ -21,6 +21,12 @@ namespace Microsoft.Azure.IIoT.OpcUa.Publisher.Runtime {
         public int? BatchSize { get; set; }
 
         /// <inheritdoc/>
+        public TimeSpan? BatchTriggerInterval { get; set; }
+
+        /// <inheritdoc/>
+        public int? MaxMessageSize { get; set; }
+
+        /// <inheritdoc/>
         public TimeSpan? DiagnosticsInterval { get; set; }
 
         /// <inheritdoc/>

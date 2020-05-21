@@ -4,6 +4,8 @@
 
 ## Overview
 
+Namespace: Microsoft.Azure.IIoT.Services.OpcUa.Registry
+
 The role of the Registry Microservice is to manage entities and identities in IoT Hub. These include:
 
 * **Applications**. In OPC parlance, an "Application" can be a server or a client or both.  It is also a grouping mechanism for Endpoints, i.e. Applications have Endpoints.  An Application contains all server provided information, such as Discovery URLs, Application and Product URIs.
@@ -51,6 +53,10 @@ After initial registration in the Registry (and thus Azure IoT Hub) server endpo
 An operator must inspect an endpoint certificate and actively activate endpoints using the provided Activation API before they can be used.
 
 The Registry Microservice provides REST APIs to activate and deactivate endpoints.  Once activated you can interact with endpoint identities using the OPC Twin REST API.
+
+## Docker image
+
+`docker pull mcr.microsoft.com/iot/opc-registry-service:preview`
 
 ## Next steps
 

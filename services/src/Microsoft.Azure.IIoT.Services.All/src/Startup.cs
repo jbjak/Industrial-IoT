@@ -6,9 +6,9 @@
 namespace Microsoft.Azure.IIoT.Services.All {
     using Microsoft.Azure.IIoT.Services.All.Runtime;
     using Microsoft.Azure.IIoT.Utils;
+    using Microsoft.Azure.IIoT.Auth.Runtime;
     using Microsoft.AspNetCore.Builder;
     using Microsoft.AspNetCore.Hosting;
-    using Microsoft.Azure.IIoT.AspNetCore.ForwardedHeaders;
     using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -19,6 +19,7 @@ namespace Microsoft.Azure.IIoT.Services.All {
     using System.Threading.Tasks;
     using System.Threading;
     using System.Linq;
+    using System.Collections.Generic;
 
     /// <summary>
     /// Mono app startup
@@ -43,10 +44,12 @@ namespace Microsoft.Azure.IIoT.Services.All {
         public Startup(IWebHostEnvironment env, IConfiguration configuration) :
             this(env, new Config(new ConfigurationBuilder()
                 .AddConfiguration(configuration)
+                .AddFromDotEnvFile()
                 .AddEnvironmentVariables()
                 .AddEnvironmentVariables(EnvironmentVariableTarget.User)
-                .AddFromDotEnvFile()
-                .AddFromKeyVault()
+                // Above configuration providers will provide connection
+                // details for KeyVault configuration provider.
+                .AddFromKeyVault(providerPriority: ConfigurationProviderPriority.Lowest)
                 .Build())) {
         }
 
@@ -66,12 +69,7 @@ namespace Microsoft.Azure.IIoT.Services.All {
         /// <param name="services"></param>
         /// <returns></returns>
         public void ConfigureServices(IServiceCollection services) {
-
-            if (Config.AspNetCoreForwardedHeadersEnabled) {
-                // Configure processing of forwarded headers
-                services.ConfigureForwardedHeaders(Config);
-            }
-
+            services.AddHeaderForwarding();
             services.AddHttpContextAccessor();
             services.AddHealthChecks();
             services.AddDistributedMemoryCache();
@@ -86,34 +84,25 @@ namespace Microsoft.Azure.IIoT.Services.All {
         public void Configure(IApplicationBuilder app, IHostApplicationLifetime appLifetime) {
             var applicationContainer = app.ApplicationServices.GetAutofacRoot();
 
-            if (!string.IsNullOrEmpty(Config.ServicePathBase)) {
-                app.UsePathBase(Config.ServicePathBase);
-            }
-
-            if (Config.AspNetCoreForwardedHeadersEnabled) {
-                // Enable processing of forwarded headers
-                app.UseForwardedHeaders();
-            }
-
-            if (Config.HttpsRedirectPort > 0) {
-                app.UseHsts();
-                app.UseHttpsRedirection();
-            }
+            app.UsePathBase();
+            app.UseHeaderForwarding();
+            app.UseHttpsRedirect();
 
             // Configure branches for business
             app.UseWelcomePage("/");
 
+            // Minimal API surface
             app.AddStartupBranch<OpcUa.Registry.Startup>("/registry");
-            app.AddStartupBranch<OpcUa.Registry.Onboarding.Startup>("/onboarding");
             app.AddStartupBranch<OpcUa.Vault.Startup>("/vault");
             app.AddStartupBranch<OpcUa.Twin.Startup>("/twin");
-            app.AddStartupBranch<OpcUa.Twin.Gateway.Startup>("/ua");
-            app.AddStartupBranch<OpcUa.Twin.History.Startup>("/history");
             app.AddStartupBranch<OpcUa.Publisher.Startup>("/publisher");
-            app.AddStartupBranch<Common.Jobs.Startup>("/jobs");
-            app.AddStartupBranch<Common.Jobs.Edge.Startup>("/edge/jobs");
-            app.AddStartupBranch<Common.Configuration.Startup>("/configuration");
-            app.AddStartupBranch<Common.Hub.Edgemanager.Startup>("/edge/manage");
+            app.AddStartupBranch<OpcUa.Publisher.Edge.Startup>("/edge/publisher");
+            app.AddStartupBranch<OpcUa.Events.Startup>("/events");
+
+            if (!Config.IsMinimumDeployment) {
+                app.AddStartupBranch<OpcUa.Twin.Gateway.Startup>("/ua");
+                app.AddStartupBranch<OpcUa.Twin.History.Startup>("/history");
+            }
 
             app.UseHealthChecks("/healthz");
 
@@ -131,9 +120,15 @@ namespace Microsoft.Azure.IIoT.Services.All {
         /// <param name="builder"></param>
         public void ConfigureContainer(ContainerBuilder builder) {
 
-            // Add diagnostics based on configuration
+            // Register service info and configuration interfaces
+            builder.RegisterInstance(Config)
+                .AsImplementedInterfaces().AsSelf();
+            builder.RegisterInstance(Config.Configuration)
+                .AsImplementedInterfaces();
+
+            // Add diagnostics and auth providers
             builder.AddDiagnostics(Config);
-            builder.RegisterInstance(Config.Configuration);
+            builder.RegisterModule<DefaultServiceAuthProviders>();
 
             builder.RegisterType<ProcessorHost>()
                 .AsImplementedInterfaces().SingleInstance();
@@ -145,29 +140,36 @@ namespace Microsoft.Azure.IIoT.Services.All {
         private sealed class ProcessorHost : IHostProcess, IDisposable, IHealthCheck {
 
             /// <inheritdoc/>
+            public ProcessorHost(Config config) {
+                _config = config;
+            }
+
+            /// <inheritdoc/>
             public void Start() {
                 _cts = new CancellationTokenSource();
 
-                var args = new string[0]; // TODO Arguments from original configuration?
+                var args = new string[0];
 
-                _runner = Task.WhenAll(new[] {
-                    Task.Run(() => Processor.Telemetry.Program.Main(args), _cts.Token),
+                // Minimal processes
+                var processes = new List<Task> {
+                    Task.Run(() => OpcUa.Registry.Sync.Program.Main(args), _cts.Token),
+                    Task.Run(() => Processor.Onboarding.Program.Main(args), _cts.Token),
+                    Task.Run(() => Processor.Tunnel.Program.Main(args), _cts.Token),
                     Task.Run(() => Processor.Events.Program.Main(args), _cts.Token),
-                    Task.Run(() => Processor.Telemetry.Cdm.Program.Main(args), _cts.Token),
-                    Task.Run(() => Processor.Telemetry.Ux.Program.Main(args), _cts.Token),
-                    Task.Run(() => Common.Identity.Program.Main(args), _cts.Token),
-                    Task.Run(() => Common.Hub.Fileupload.Program.Main(args), _cts.Token),
-                    Task.Run(() => OpcUa.Registry.Discovery.Program.Main(args), _cts.Token),
-                    Task.Run(() => OpcUa.Registry.Events.Program.Main(args), _cts.Token),
-                    Task.Run(() => OpcUa.Registry.Security.Program.Main(args), _cts.Token),
-                    Task.Run(() => OpcUa.Twin.Import.Program.Main(args), _cts.Token),
-                });
+                    Task.Run(() => Processor.Telemetry.Program.Main(args), _cts.Token),
+                };
+
+                if (!_config.IsMinimumDeployment) {
+                    processes.Add(Task.Run(() => Processor.Telemetry.Cdm.Program.Main(args),
+                        _cts.Token));
+                }
+                _runner = Task.WhenAll(processes.ToArray());
             }
 
             /// <inheritdoc/>
             public Task StartAsync() {
-                Start();
-                return Task.CompletedTask;
+                // Delay start by 10 seconds to let api boot up first
+                return Task.Delay(TimeSpan.FromSeconds(10)).ContinueWith(_ => Start());
             }
 
             /// <inheritdoc/>
@@ -200,6 +202,7 @@ namespace Microsoft.Azure.IIoT.Services.All {
 
             private Task _runner;
             private CancellationTokenSource _cts;
+            private readonly Config _config;
         }
     }
 }

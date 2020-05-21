@@ -11,7 +11,12 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Twin {
     using Microsoft.Azure.IIoT.OpcUa.Testing.Runtime;
     using Microsoft.Azure.IIoT.OpcUa.Core.Models;
     using Microsoft.Azure.IIoT.Hub.Client;
+    using Microsoft.Azure.IIoT.Auth;
     using Microsoft.Azure.IIoT.Utils;
+    using Microsoft.Azure.IIoT.Serializers.NewtonSoft;
+    using Microsoft.Azure.IIoT.Serializers.MessagePack;
+    using Microsoft.Azure.IIoT.Hub;
+    using Microsoft.Azure.IIoT.Hub.Models;
     using Microsoft.Extensions.Hosting;
     using Microsoft.AspNetCore.Hosting;
     using Microsoft.AspNetCore.Mvc.Testing;
@@ -20,6 +25,10 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Twin {
     using System;
     using System.Net.Http;
     using System.Text;
+    using System.Collections.Generic;
+    using System.Threading.Tasks;
+    using System.Threading;
+    using System.Linq;
 
     /// <summary>
     /// Startup class for tests
@@ -38,8 +47,10 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Twin {
             base.ConfigureContainer(builder);
 
             builder.RegisterType<TestIoTHubConfig>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             builder.RegisterType<TestModule>()
+                .AsImplementedInterfaces().SingleInstance();
+            builder.RegisterType<TestIdentity>()
                 .AsImplementedInterfaces().SingleInstance();
             builder.RegisterType<ClientServices>()
                 .AsImplementedInterfaces().SingleInstance();
@@ -51,23 +62,60 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Twin {
                 .AsImplementedInterfaces();
             builder.RegisterType<VariantEncoderFactory>()
                 .AsImplementedInterfaces().SingleInstance();
+
+            builder.RegisterType<TestAuthConfig>()
+                .AsImplementedInterfaces();
         }
 
-        public class TestIoTHubConfig : IIoTHubConfig {
+        public class TestAuthConfig : IServerAuthConfig {
+            public bool AllowAnonymousAccess => true;
+            public IEnumerable<IOAuthServerConfig> JwtBearerProviders { get; }
+        }
+
+        public class TestIoTHubConfig : IIoTHubConfig, IIoTHubConfigurationServices {
             public string IoTHubConnString =>
                 ConnectionString.CreateServiceConnectionString(
                     "test.test.org", "iothubowner", Convert.ToBase64String(
                         Encoding.UTF8.GetBytes(Guid.NewGuid().ToString()))).ToString();
-            public string IoTHubResourceId => null;
+
+            public Task ApplyConfigurationAsync(string deviceId,
+                ConfigurationContentModel configuration, CancellationToken ct = default) {
+                return Task.CompletedTask;
+            }
+
+            public Task<ConfigurationModel> CreateOrUpdateConfigurationAsync(
+                ConfigurationModel configuration, bool forceUpdate, CancellationToken ct = default) {
+                return Task.FromResult<ConfigurationModel>(new ConfigurationModel());
+            }
+
+            public Task DeleteConfigurationAsync(string configurationId, string etag,
+                CancellationToken ct = default) {
+                return Task.CompletedTask;
+            }
+
+            public Task<ConfigurationModel> GetConfigurationAsync(string configurationId,
+                CancellationToken ct = default) {
+                return Task.FromResult<ConfigurationModel>(new ConfigurationModel());
+            }
+
+            public Task<IEnumerable<ConfigurationModel>> ListConfigurationsAsync(
+                int? maxCount, CancellationToken ct = default) {
+                return Task.FromResult(Enumerable.Empty<ConfigurationModel>());
+            }
         }
     }
 
     /// <inheritdoc/>
     public class WebAppFixture : WebApplicationFactory<TestStartup>, IHttpClientFactory {
 
+        public static IEnumerable<object[]> GetSerializers() {
+            yield return new object[] { new MessagePackSerializer() };
+            yield return new object[] { new NewtonSoftJsonSerializer() };
+        }
+
         /// <inheritdoc/>
         protected override IHostBuilder CreateHostBuilder() {
-            return Host.CreateDefaultBuilder();
+            return Extensions.Hosting.Host.CreateDefaultBuilder();
         }
 
         /// <inheritdoc/>

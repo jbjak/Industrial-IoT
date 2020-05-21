@@ -11,13 +11,13 @@ namespace Microsoft.Azure.IIoT.Messaging.SignalR {
     public interface ISignalRServiceConfig {
 
         /// <summary>
-        /// SignalR Hub name
-        /// </summary>
-        string SignalRHubName { get; }
-
-        /// <summary>
         /// SignalR connection string
         /// </summary>
         string SignalRConnString { get; }
+
+        /// <summary>
+        /// Whether SignalR is configured to be serverless
+        /// </summary>
+        bool SignalRServerLess { get; }
     }
 }

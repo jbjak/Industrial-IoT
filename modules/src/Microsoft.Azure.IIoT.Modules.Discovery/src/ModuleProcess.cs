@@ -5,13 +5,17 @@
 
 namespace Microsoft.Azure.IIoT.Modules.Discovery {
     using Microsoft.Azure.IIoT.Modules.Discovery.Runtime;
+    using Microsoft.Azure.IIoT.Modules.Discovery.Controllers;
     using Microsoft.Azure.IIoT.OpcUa.Protocol.Services;
     using Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services;
+    using Microsoft.Azure.IIoT.Module;
     using Microsoft.Azure.IIoT.Module.Framework;
     using Microsoft.Azure.IIoT.Module.Framework.Services;
     using Microsoft.Azure.IIoT.Module.Framework.Client;
     using Microsoft.Azure.IIoT.Tasks.Default;
+    using Microsoft.Azure.IIoT.Serializers;
     using Microsoft.Azure.IIoT.Hub;
+    using Microsoft.Azure.IIoT.Utils;
     using Microsoft.Extensions.Configuration;
     using Autofac;
     using System;
@@ -20,6 +24,7 @@ namespace Microsoft.Azure.IIoT.Modules.Discovery {
     using System.Diagnostics;
     using System.Threading;
     using Serilog;
+    using Prometheus;
 
     /// <summary>
     /// Module Process
@@ -61,11 +66,15 @@ namespace Microsoft.Azure.IIoT.Modules.Discovery {
             _exitCode = exitCode;
             _exit.TrySetResult(true);
 
-            // Set timer to kill the entire process after a minute.
+            if (Host.IsContainer) {
+                // Set timer to kill the entire process after 5 minutes.
 #pragma warning disable IDE0067 // Dispose objects before losing scope
-            var _ = new Timer(o => Process.GetCurrentProcess().Kill(), null,
-                TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+                var _ = new Timer(o => {
+                    Log.Logger.Fatal("Killing non responsive module process!");
+                    Process.GetCurrentProcess().Kill();
+                }, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
 #pragma warning restore IDE0067 // Dispose objects before losing scope
+            }
         }
 
         /// <summary>
@@ -78,12 +87,18 @@ namespace Microsoft.Azure.IIoT.Modules.Discovery {
                     _reset = new TaskCompletionSource<bool>();
                     var module = hostScope.Resolve<IModuleHost>();
                     var logger = hostScope.Resolve<ILogger>();
+                    var moduleConfig = hostScope.Resolve<IModuleConfig>();
+                    var identity = hostScope.Resolve<IIdentity>();
+                    logger.Information("Initiating prometheus at port {0}/metrics", kDiscoveryPrometheusPort);
+                    var server = new MetricServer(port: kDiscoveryPrometheusPort);
                     try {
+                        server.StartWhenEnabled(moduleConfig, logger);
                         // Start module
-                        var product = "OpcDiscovery_" +
-                            GetType().Assembly.GetReleaseVersion().ToString();
+                        var version = GetType().Assembly.GetReleaseVersion().ToString();
+                        kDiscoveryModuleStart.WithLabels(
+                            identity.DeviceId ?? "", identity.ModuleId ?? "").Inc();
                         await module.StartAsync(IdentityType.Discoverer, SiteId,
-                            product, this);
+                            "OpcDiscovery", version, this);
                         OnRunning?.Invoke(this, true);
                         await Task.WhenAny(_reset.Task, _exit.Task);
                         if (_exit.Task.IsCompleted) {
@@ -97,7 +112,10 @@ namespace Microsoft.Azure.IIoT.Modules.Discovery {
                         logger.Error(ex, "Error during module execution - restarting!");
                     }
                     finally {
+                        kDiscoveryModuleStart.WithLabels(
+                            identity.DeviceId ?? "", identity.ModuleId ?? "").Set(0);
                         await module.StopAsync();
+                        server.StopWhenEnabled(moduleConfig, logger);
                         OnRunning?.Invoke(this, false);
                     }
                 }
@@ -116,12 +134,13 @@ namespace Microsoft.Azure.IIoT.Modules.Discovery {
 
             // Register configuration interfaces
             builder.RegisterInstance(config)
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             builder.RegisterInstance(this)
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
 
             // register logger
             builder.AddDiagnostics(config);
+            builder.RegisterModule<NewtonSoftJsonModule>();
 
             // Register module framework
             builder.RegisterModule<ModuleFramework>();
@@ -141,11 +160,11 @@ namespace Microsoft.Azure.IIoT.Modules.Discovery {
                 .AsImplementedInterfaces();
 
             // Register controllers
-            builder.RegisterType<v2.Supervisor.DiscoveryMethodsController>()
+            builder.RegisterType<DiscoveryMethodsController>()
                 .AsImplementedInterfaces().InstancePerLifetimeScope();
-            builder.RegisterType<v2.Supervisor.DiagnosticSettingsController>()
+            builder.RegisterType<DiagnosticSettingsController>()
                 .AsImplementedInterfaces().InstancePerLifetimeScope();
-            builder.RegisterType<v2.Supervisor.DiscoverySettingsController>()
+            builder.RegisterType<DiscoverySettingsController>()
                 .AsImplementedInterfaces().InstancePerLifetimeScope();
 
             return builder.Build();
@@ -155,5 +174,11 @@ namespace Microsoft.Azure.IIoT.Modules.Discovery {
         private readonly TaskCompletionSource<bool> _exit;
         private TaskCompletionSource<bool> _reset;
         private int _exitCode;
+        private const int kDiscoveryPrometheusPort = 9700;
+        private static readonly Gauge kDiscoveryModuleStart = Metrics
+            .CreateGauge("iiot_edge_discovery_module_start", "discovery module started",
+                new GaugeConfiguration {
+                    LabelNames = new[] { "deviceid", "module" }
+                });
     }
 }

@@ -5,11 +5,11 @@
 
 namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
     using Microsoft.Azure.IIoT.Services.OpcUa.Vault.Runtime;
+    using Microsoft.Azure.IIoT.Services.OpcUa.Vault.Auth;
     using Microsoft.Azure.IIoT.AspNetCore.Auth;
     using Microsoft.Azure.IIoT.AspNetCore.Auth.Clients;
     using Microsoft.Azure.IIoT.AspNetCore.Cors;
     using Microsoft.Azure.IIoT.AspNetCore.Correlation;
-    using Microsoft.Azure.IIoT.AspNetCore.ForwardedHeaders;
     using Microsoft.Azure.IIoT.OpcUa.Registry.Events.v2;
     using Microsoft.Azure.IIoT.OpcUa.Vault.Handler;
     using Microsoft.Azure.IIoT.OpcUa.Vault.Events;
@@ -17,7 +17,7 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
     using Microsoft.Azure.IIoT.OpcUa.Vault.Storage;
     using Microsoft.Azure.IIoT.OpcUa.Api.Registry.Clients;
     using Microsoft.Azure.IIoT.OpcUa.Api.Registry;
-    using Microsoft.Azure.IIoT.Auth.Clients.Default;
+    using Microsoft.Azure.IIoT.Auth;
     using Microsoft.Azure.IIoT.Crypto.KeyVault.Clients;
     using Microsoft.Azure.IIoT.Crypto.Storage;
     using Microsoft.Azure.IIoT.Crypto.Default;
@@ -27,8 +27,9 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
     using Microsoft.Azure.IIoT.Messaging.ServiceBus.Clients;
     using Microsoft.Azure.IIoT.Messaging.Default;
     using Microsoft.Azure.IIoT.Utils;
-    using Microsoft.Azure.IIoT.Http.Auth;
+    using Microsoft.Azure.IIoT.Serializers;
     using Microsoft.Azure.IIoT.Http.Default;
+    using Microsoft.Azure.IIoT.Http.Ssl;
     using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Logging;
@@ -36,7 +37,6 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
     using Microsoft.AspNetCore.Builder;
     using Microsoft.AspNetCore.Hosting;
     using Microsoft.OpenApi.Models;
-    using Newtonsoft.Json;
     using Autofac;
     using Autofac.Extensions.DependencyInjection;
     using System;
@@ -71,10 +71,12 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
         public Startup(IWebHostEnvironment env, IConfiguration configuration) :
             this(env, new Config(new ConfigurationBuilder()
                 .AddConfiguration(configuration)
+                .AddFromDotEnvFile()
                 .AddEnvironmentVariables()
                 .AddEnvironmentVariables(EnvironmentVariableTarget.User)
-                .AddFromDotEnvFile()
-                .AddFromKeyVault()
+                // Above configuration providers will provide connection
+                // details for KeyVault configuration provider.
+                .AddFromKeyVault(providerPriority: ConfigurationProviderPriority.Lowest)
                 .Build())) {
         }
 
@@ -97,38 +99,28 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
         /// <returns></returns>
         public void ConfigureServices(IServiceCollection services) {
 
-            services.AddLogging(o => o.AddConsole().AddDebug());
+            // services.AddLogging(o => o.AddConsole().AddDebug());
 
-            if (Config.AspNetCoreForwardedHeadersEnabled) {
-                // Configure processing of forwarded headers
-                services.ConfigureForwardedHeaders(Config);
-            }
-
-            // Setup (not enabling yet) CORS
+            services.AddHeaderForwarding();
             services.AddCors();
             services.AddHealthChecks();
             services.AddDistributedMemoryCache();
+            services.AddAzureDataProtection(Config.Configuration);
 
-            // Add authentication
-            services.AddJwtBearerAuthentication(Config,
-                Environment.IsDevelopment());
-
-            // Add authorization
-            services.AddAuthorization(options => {
-                options.AddPolicies(Config.AuthRequired,
-                    Config.UseRoles && !Environment.IsDevelopment());
-            });
+            services.AddHttpsRedirect();
+            services.AddAuthentication()
+                .AddJwtBearerProvider(AuthProvider.AzureAD)
+                .AddJwtBearerProvider(AuthProvider.AuthService);
+            services.AddAuthorizationPolicies(
+                Policies.RoleMapping,
+                Policies.CanRead,
+                Policies.CanWrite,
+                Policies.CanSign,
+                Policies.CanManage);
 
             // Add controllers as services so they'll be resolved.
-            services.AddControllers()
-                .AddNewtonsoftJson(options => {
-                    options.SerializerSettings.Formatting = Formatting.Indented;
-                    options.SerializerSettings.Converters.Add(new ExceptionConverter(
-                        Environment.IsDevelopment()));
-                    options.SerializerSettings.MaxDepth = 10;
-                });
-
-            services.AddSwagger(Config, ServiceInfo.Name, ServiceInfo.Description);
+            services.AddControllers().AddSerializers();
+            services.AddSwagger(ServiceInfo.Name, ServiceInfo.Description);
         }
 
 
@@ -142,26 +134,15 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
             var applicationContainer = app.ApplicationServices.GetAutofacRoot();
             var log = applicationContainer.Resolve<ILogger>();
 
-            if (!string.IsNullOrEmpty(Config.ServicePathBase)) {
-                app.UsePathBase(Config.ServicePathBase);
-            }
-
-            if (Config.AspNetCoreForwardedHeadersEnabled) {
-                // Enable processing of forwarded headers
-                app.UseForwardedHeaders();
-            }
+            app.UsePathBase();
+            app.UseHeaderForwarding();
 
             app.UseRouting();
             app.EnableCors();
 
-            if (Config.AuthRequired) {
-                app.UseAuthentication();
-            }
+            app.UseJwtBearerAuthentication();
             app.UseAuthorization();
-            if (Config.HttpsRedirectPort > 0) {
-                app.UseHsts();
-                app.UseHttpsRedirection();
-            }
+            app.UseHttpsRedirect();
 
             app.UseCorrelation();
             app.UseSwagger();
@@ -176,8 +157,8 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
             appLifetime.ApplicationStopped.Register(applicationContainer.Dispose);
 
             // Print some useful information at bootstrap time
-            log.Information("{service} web service started with id {id}", ServiceInfo.Name,
-                Uptime.ProcessId);
+            log.Information("{service} web service started with id {id}",
+                ServiceInfo.Name, ServiceInfo.Id);
         }
 
         /// <summary>
@@ -188,49 +169,34 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
 
             // Register service info and configuration interfaces
             builder.RegisterInstance(ServiceInfo)
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             builder.RegisterInstance(Config)
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
+            builder.RegisterInstance(Config.Configuration)
+                .AsImplementedInterfaces();
 
-            // Add diagnostics based on configuration
+            // Add diagnostics
             builder.AddDiagnostics(Config);
-
-            // CORS setup
-            builder.RegisterType<CorsSetup>()
-                .AsImplementedInterfaces().SingleInstance();
 
             // Register http client module
             builder.RegisterModule<HttpClientModule>();
+#if DEBUG
+            builder.RegisterType<NoOpCertValidator>()
+                .AsImplementedInterfaces();
+#endif
+            // Add serializers
+            builder.RegisterModule<MessagePackModule>();
+            builder.RegisterModule<NewtonSoftJsonModule>();
 
-            // ... with bearer auth
-            builder.RegisterType<DistributedTokenCache>()
-                .AsImplementedInterfaces().SingleInstance();
-            builder.RegisterType<HttpBearerAuthentication>()
-                .AsImplementedInterfaces().SingleInstance();
+            // Add service to service authentication
+            builder.RegisterModule<WebApiAuthentication>();
 
-            // key vault client ...
-            builder.RegisterType<AppAuthenticationProvider>()
-                .AsImplementedInterfaces().SingleInstance();
-            builder.RegisterType<KeyVaultServiceClient>()
-                .AsImplementedInterfaces().SingleInstance();
+            // CORS setup
+            builder.RegisterType<CorsSetup>()
+                .AsImplementedInterfaces();
 
-            // Register event bus ...
-            builder.RegisterType<EventBusHost>()
-                .AsImplementedInterfaces().SingleInstance();
-            builder.RegisterType<ServiceBusClientFactory>()
-                .AsImplementedInterfaces().SingleInstance();
-            builder.RegisterType<ServiceBusEventBus>()
-                .AsImplementedInterfaces().SingleInstance();
-
-            // ... subscribe to application events ...
-            builder.RegisterType<ApplicationEventBusSubscriber>()
-                .AsImplementedInterfaces().SingleInstance();
-            // ... and auto start
-            builder.RegisterType<HostAutoStart>()
-                .AutoActivate()
-                .AsImplementedInterfaces().SingleInstance();
-            builder.RegisterType<RegistryEventHandler>()
-                .AsImplementedInterfaces().SingleInstance();
+            // Add key vault
+            builder.RegisterModule<KeyVaultClientModule>();
 
             // Crypto services
             builder.RegisterType<CertificateDatabase>()
@@ -239,7 +205,6 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
                 .AsImplementedInterfaces().SingleInstance();
             builder.RegisterType<CertificateFactory>()
                 .AsImplementedInterfaces().SingleInstance();
-            // TODO: Add keyvault
             builder.RegisterType<CertificateIssuer>()
                 .AsImplementedInterfaces().SingleInstance();
             builder.RegisterType<KeyDatabase>()
@@ -247,13 +212,29 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
             builder.RegisterType<KeyHandleSerializer>()
                 .AsImplementedInterfaces().SingleInstance();
 
+            // TODO: Add keyvault here to override ....
+
+            // Register event bus ...
+            builder.RegisterType<EventBusHost>()
+                .AsImplementedInterfaces().SingleInstance();
+            builder.RegisterType<ServiceBusClientFactory>()
+                .AsImplementedInterfaces();
+            builder.RegisterType<ServiceBusEventBus>()
+                .AsImplementedInterfaces().SingleInstance();
+
+            // ... subscribe to application events ...
+            builder.RegisterType<ApplicationEventBusSubscriber>()
+                .AsImplementedInterfaces().SingleInstance();
+            builder.RegisterType<RegistryEventHandler>()
+                .AsImplementedInterfaces();
+
             // Register registry micro services adapters
             builder.RegisterType<RegistryServiceClient>()
-                .AsImplementedInterfaces().SingleInstance();
-            builder.RegisterType<RegistryAdapter>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
+            builder.RegisterType<RegistryServicesApiAdapter>()
+                .AsImplementedInterfaces();
             builder.RegisterType<EntityInfoResolver>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
 
             // Vault services
             builder.RegisterType<RequestDatabase>()
@@ -275,17 +256,22 @@ namespace Microsoft.Azure.IIoT.Services.OpcUa.Vault {
 
             // Vault handler
             builder.RegisterType<AutoApproveHandler>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             builder.RegisterType<KeyPairRequestHandler>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             builder.RegisterType<SigningRequestHandler>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
 
             // ... with cosmos db collection as storage
             builder.RegisterType<ItemContainerFactory>()
                 .AsImplementedInterfaces();
             builder.RegisterType<CosmosDbServiceClient>()
                 .AsImplementedInterfaces();
+
+            // ... and auto start
+            builder.RegisterType<HostAutoStart>()
+                .AutoActivate()
+                .AsImplementedInterfaces().SingleInstance();
         }
     }
 }

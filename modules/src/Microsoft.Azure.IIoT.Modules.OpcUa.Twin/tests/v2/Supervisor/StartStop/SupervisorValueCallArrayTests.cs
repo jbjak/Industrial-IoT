@@ -14,7 +14,6 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Twin.v2.Supervisor.StartStop {
     using System.Threading.Tasks;
     using Xunit;
     using Autofac;
-    using System;
 
     [Collection(WriteCollection.Name)]
     public class SupervisorValueCallArrayTests {
@@ -30,7 +29,7 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Twin.v2.Supervisor.StartStop {
                 new EndpointRegistrationModel {
                     Endpoint = new EndpointModel {
                         Url = $"opc.tcp://{Dns.GetHostName()}:{_server.Port}/UA/SampleServer",
-                        Certificate = _server.Certificate?.RawData
+                        Certificate = _server.Certificate?.RawData?.ToThumbprint()
                     },
                     Id = "testid",
                     SupervisorId = SupervisorModelEx.CreateSupervisorId(deviceId, moduleId)
@@ -38,7 +37,11 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Twin.v2.Supervisor.StartStop {
         }
 
         private readonly TestServerFixture _server;
-        private readonly bool _runAll = Environment.GetEnvironmentVariable("TEST_ALL") != null;
+#if TEST_ALL
+        private readonly bool _runAll = true;
+#else
+        private readonly bool _runAll = System.Environment.GetEnvironmentVariable("TEST_ALL") != null;
+#endif
 
         [SkippableFact]
         public async Task NodeMethodMetadataStaticArrayMethod1TestAsync() {

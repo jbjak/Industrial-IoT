@@ -21,11 +21,6 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Models {
         public string SiteId { get; set; }
 
         /// <summary>
-        /// Supervisor public client cert
-        /// </summary>
-        public byte[] Certificate { get; set; }
-
-        /// <summary>
         /// Current log level
         /// </summary>
         public TraceLogLevel? LogLevel { get; set; }
@@ -45,5 +40,10 @@ namespace Microsoft.Azure.IIoT.OpcUa.Registry.Models {
         /// Whether publisher is connected
         /// </summary>
         public bool? Connected { get; set; }
+
+        /// <summary>
+        /// The reported version of the publisher
+        /// </summary>
+        public string Version { get; set; }
     }
 }

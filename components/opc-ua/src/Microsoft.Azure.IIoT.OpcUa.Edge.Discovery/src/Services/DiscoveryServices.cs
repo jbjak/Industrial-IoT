@@ -15,8 +15,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
     using Microsoft.Azure.IIoT.Module;
     using Microsoft.Azure.IIoT.Exceptions;
     using Microsoft.Azure.IIoT.Utils;
-    using Microsoft.Azure.IIoT.Hub;
-    using Newtonsoft.Json.Linq;
+    using Microsoft.Azure.IIoT.Serializers;
     using System;
     using System.Collections.Generic;
     using System.Collections.Concurrent;
@@ -27,6 +26,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
     using System.Threading;
     using System.Threading.Tasks;
     using Serilog;
+    using Prometheus;
 
     /// <summary>
     /// Provides discovery services
@@ -34,14 +34,10 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
     public class DiscoveryServices : IDiscoveryServices, IScannerServices, IDisposable {
 
         /// <inheritdoc/>
-        public DiscoveryMode Mode {
-            get => _request.Mode;
-        }
+        public DiscoveryMode Mode => _request.Mode;
 
         /// <inheritdoc/>
-        public DiscoveryConfigModel Configuration {
-            get => _request.Configuration;
-        }
+        public DiscoveryConfigModel Configuration => _request.Configuration;
 
         /// <summary>
         /// Create services
@@ -49,11 +45,13 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
         /// <param name="client"></param>
         /// <param name="events"></param>
         /// <param name="logger"></param>
+        /// <param name="serializer"></param>
         /// <param name="progress"></param>
         public DiscoveryServices(IEndpointDiscovery client, IEventEmitter events,
-            ILogger logger, IDiscoveryProgress progress = null) {
+            IJsonSerializer serializer, ILogger logger, IDiscoveryProgress progress = null) {
 
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _client = client ?? throw new ArgumentNullException(nameof(client));
             _events = events ?? throw new ArgumentNullException(nameof(events));
             _progress = progress ?? new ProgressLogger(logger);
@@ -71,6 +69,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
 
         /// <inheritdoc/>
         public async Task DiscoverAsync(DiscoveryRequestModel request, CancellationToken ct) {
+            kDiscoverAsync.Inc();
             if (request == null) {
                 throw new ArgumentNullException(nameof(request));
             }
@@ -97,6 +96,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
 
         /// <inheritdoc/>
         public async Task CancelAsync(DiscoveryCancelModel request, CancellationToken ct) {
+            kCancelAsync.Inc();
             if (request == null) {
                 throw new ArgumentNullException(nameof(request));
             }
@@ -114,7 +114,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
 
         /// <inheritdoc/>
         public Task ScanAsync() {
-
+            kScanAsync.Inc();
             // Fire timer now so that new request is scheduled
             _timer.Change(TimeSpan.Zero, Timeout.InfiniteTimeSpan);
             return Task.CompletedTask;
@@ -314,6 +314,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
                     netscanner.ScanCount, request.TotalAddresses, addresses.Count);
             }
             request.Token.ThrowIfCancellationRequested();
+
+            await AddLoopbackAddressesAsync(addresses);
             if (addresses.Count == 0) {
                 return new List<ApplicationRegistrationModel>();
             }
@@ -383,6 +385,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
         private async Task<List<ApplicationRegistrationModel>> DiscoverServersAsync(
             DiscoveryRequest request, Dictionary<IPEndPoint, Uri> discoveryUrls,
             List<string> locales) {
+            kDiscoverServersAsync.Inc();
             var discovered = new List<ApplicationRegistrationModel>();
             var count = 0;
             _progress.OnServerDiscoveryStarted(request.Request, 1, count, discoveryUrls.Count);
@@ -402,7 +405,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
                 var endpoints = 0;
                 foreach (var ep in eps) {
                     discovered.AddOrUpdate(ep.ToServiceModel(item.Key.ToString(),
-                        _events.SiteId, _events.DeviceId, _events.ModuleId));
+                        _events.SiteId, _events.DeviceId, _events.ModuleId, _serializer));
                     endpoints++;
                 }
                 _progress.OnFindEndpointsFinished(request.Request, 1, count, discoveryUrls.Count,
@@ -482,11 +485,9 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
                         }
 
                         // Check local host
-                        if (host.EqualsIgnoreCase("localhost") &&
-                            (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")?
-                                .EqualsIgnoreCase("true") ?? false)) {
+                        if (host.EqualsIgnoreCase("localhost") && Host.IsContainer) {
                             // Also resolve docker internal since we are in a container
-                            host = "host.docker.internal";
+                            host = kDockerHostName;
                             continue;
                         }
                         break;
@@ -498,6 +499,34 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
                 }
                 return list;
             });
+        }
+
+        /// <summary>
+        /// Add localhost ip to list if not already in it.
+        /// </summary>
+        /// <param name="addresses"></param>
+        /// <returns></returns>
+        private async Task AddLoopbackAddressesAsync(List<IPAddress> addresses) {
+            // Check local host
+            try {
+                if (Host.IsContainer) {
+                    // Resolve docker host since we are running in a container
+                    var entry = await Dns.GetHostEntryAsync(kDockerHostName);
+                    foreach (var address in entry.AddressList
+                                .Where(a => a.AddressFamily == AddressFamily.InterNetwork)
+                                .Where(a => !addresses.Any(b => a.Equals(b)))) {
+                        _logger.Information("Including host address {address}", address);
+                        addresses.Add(address);
+                    }
+                }
+                else {
+                    // Add loopback address
+                    addresses.Add(IPAddress.Loopback);
+                }
+            }
+            catch (Exception e) {
+                _logger.Warning(e, "Failed to add local host address.");
+            }
         }
 
         /// <summary>
@@ -528,7 +557,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
                         Context = request.Request.Context,
                         RegisterOnly = request.Mode == DiscoveryMode.Off,
                         Diagnostics = diagnostics == null ? null :
-                            JToken.FromObject(diagnostics)
+                            _serializer.FromObject(diagnostics)
                     },
                     TimeStamp = timestamp
                 })
@@ -536,8 +565,9 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
                     discovery.Index = i;
                     return discovery;
                 });
-            await Task.Run(() => _events.SendJsonEventAsync(
-                messages, MessageSchemaTypes.DiscoveryEvents), ct);
+            await Task.Run(() => _events.SendEventAsync(
+                messages.Select(message => _serializer.SerializeToBytes(message).ToArray()),
+                    ContentMimeType.Json, MessageSchemaTypes.DiscoveryEvents, "utf-8"), ct);
             _logger.Information("{count} results uploaded.", discovered.Count);
         }
 
@@ -613,8 +643,10 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
 
         /// <summary> Progress reporting every 3 seconds </summary>
         private static readonly TimeSpan kProgressInterval = TimeSpan.FromSeconds(3);
+        private const string kDockerHostName = "host.docker.internal";
 
         private readonly ILogger _logger;
+        private readonly IJsonSerializer _serializer;
         private readonly IEventEmitter _events;
         private readonly IDiscoveryProgress _progress;
         private readonly IEndpointDiscovery _client;
@@ -629,6 +661,15 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Services {
         private readonly CancellationTokenSource _cts =
             new CancellationTokenSource();
         private DiscoveryRequest _request = new DiscoveryRequest();
+        private static readonly string kDiscoveryMetricsPrefix = "iiot_edge_discovery_";
 #pragma warning restore IDE0069 // Disposable fields should be disposed
+        private static readonly Counter kDiscoverAsync = Metrics
+    .CreateCounter(kDiscoveryMetricsPrefix + "discover", "call to discover");
+        private static readonly Counter kCancelAsync = Metrics
+    .CreateCounter(kDiscoveryMetricsPrefix + "cancel", "call to cancel");
+        private static readonly Counter kDiscoverServersAsync = Metrics
+    .CreateCounter(kDiscoveryMetricsPrefix + "discover_servers", "call to discoverServersAsync");
+        private static readonly Counter kScanAsync = Metrics
+            .CreateCounter(kDiscoveryMetricsPrefix + "scan", "call to scanAsync");
     }
 }

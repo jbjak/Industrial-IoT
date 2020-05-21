@@ -15,6 +15,13 @@ tab_width = 4
 end_of_line = crlf
 insert_final_newline = false
 
+# JSON files, shell scripts
+[*.json, *.sh]
+
+# New line preferences
+end_of_line = lf
+insert_final_newline = true
+
 #### .NET Coding Conventions ####
 
 # Organize usings
@@ -83,7 +90,7 @@ csharp_style_expression_bodied_properties = when_on_single_line:silent
 # Pattern matching preferences
 csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
 csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
-csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_prefer_switch_expression = false:suggestion
 
 # Null-checking preferences
 csharp_style_conditional_delegate_call = true:suggestion
@@ -94,7 +101,7 @@ csharp_preferred_modifier_order = public,private,protected,internal,static,exter
 
 # Code-block preferences
 csharp_prefer_braces = true:suggestion
-csharp_prefer_simple_using_statement = true:suggestion
+csharp_prefer_simple_using_statement = false:suggestion
 
 # Expression-level preferences
 csharp_prefer_simple_default_expression = true:suggestion

@@ -2,34 +2,64 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "servicePrincipalId": {
+        "deploymentLevel": {
             "type": "string",
+            "defaultValue": "Standard",
+            "allowedValues": [
+                "Standard",
+                "Minimum"
+            ],
             "metadata": {
-                "description": "Specifies the object ID of the service principal in your Azure Active Directory tenant.  You can obtain it using Get-AzADServicePrincipal cmdlet."
+                "description": "Specifies the level of resources that should be deployed (e.g. for a 'Minimum' deployment)."
             }
         },
         "serviceAppId": {
             "type": "string",
+            "defaultValue": "",
             "metadata": {
                 "description": "Specifies the registered service application identifier (GUID) in your Azure Active Directory tenant."
             }
         },
         "serviceAppSecret": {
             "type": "securestring",
+            "defaultValue": "",
             "metadata": {
-                "description": "The registered service application secret used to authenticate against KeyVault."
+                "description": "The registered service application secret used to authenticate the service principal."
             }
         },
         "clientAppId": {
             "type": "string",
+            "defaultValue": "",
             "metadata": {
-                "description": "Specifies a registered client application identifier (GUID) in your Azure Active Directory tenant."
+                "description": "A client application identifier (GUID) in your Azure Active Directory tenant for confidential web applications."
             }
         },
         "clientAppSecret": {
             "type": "securestring",
+            "defaultValue": "",
             "metadata": {
-                "description": "The registered client application secret."
+                "description": "The registered client application secret for confidential web applications."
+            }
+        },
+        "publicClientAppId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "A client application identifier (GUID) in your Azure Active Directory tenant for public application such as CLI."
+            }
+        },
+        "keyVaultPrincipalId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Specifies the object ID of a principal in your Azure Active Directory tenant to access keyvault."
+            }
+        },
+        "datalakeServicePrincipalId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Specifies the object ID of a principal in your Azure Active Directory tenant to access datalake if deployed."
             }
         },
         "authorityUri": {
@@ -88,11 +118,15 @@
                 "description": "The artifacts url from which to pull all linked templates.  Default is official repository."
             }
         },
-        "managedIdentityName": {
+        "simulationProfile": {
             "type": "string",
-            "defaultValue": "[if(not(empty(parameters('servicePrincipalId'))), '', concat('msi', take(uniqueString(subscription().subscriptionId, resourceGroup().id), 5)))]",
+            "defaultValue": "default",
+            "allowedValues": [
+                "default",
+                "testing"
+            ],
             "metadata": {
-                "description": "The name of the managed identity to create.  If keyvault principal was omitted a default identity will be provisioned to access resources."
+                "description": "The simulation profile to use."
             }
         },
         "numberOfLinuxGateways": {
@@ -180,20 +214,26 @@
         }
     },
     "variables": {
-        "infrastructureResourcName": "infrastructure",
-        "infrastructureResourceId": "[resourceId('Microsoft.Resources/deployments', variables('infrastructureResourcName'))]",
+        "infrastructureDeploymentLevel": "[if(or(equals(parameters('deploymentLevel'), 'Standard'), variables('platformDeployment')), 'Standard', 'Minimum')]",
+        "minimumInfrastructureResourceName": "infrastructure.minimum",
+        "minimumInfrastructureResourceId": "[resourceId('Microsoft.Resources/deployments', variables('minimumInfrastructureResourceName'))]",
+        "standardInfrastructureResourceName": "infrastructure.standard",
+        "standardInfrastructureResourceId": "[resourceId('Microsoft.Resources/deployments', variables('standardInfrastructureResourceName'))]",
+        "standardInfrastructureDeployment": "[equals(variables('infrastructureDeploymentLevel'), 'Standard')]",
         "authConfigurationResourcName": "auth.configuration",
-        "platformDeployment": "[not(and(empty(parameters('siteName')), empty(parameters('serviceSiteName')), equals(0, parameters('numberOfLinuxGateways')), equals(0, parameters('numberOfWindowsGateways'))))]",
+        "platformDeployment": "[not(and(empty(parameters('siteName')), empty(parameters('serviceSiteName'))))]",
         "platformResourcName": "platform",
         "platformResourceId": "[resourceId('Microsoft.Resources/deployments', variables('platformResourcName'))]",
+        "simulationDeployment": "[not(and(equals(0, parameters('numberOfLinuxGateways')), equals(0, parameters('numberOfWindowsGateways'))))]",
+        "simulationResourcName": "simulation",
         "templateBaseUrl": "[if(empty(parameters('templateUrl')), deployment().properties.templateLink.uri, concat(parameters('templateUrl'), '/', parameters('branchName'), '/deploy/templates/'))]"
     },
     "resources": [
         {
-            "comments": "Deploy Azure Infrastructure required by the platform.",
+            "comments": "Deploy minimum required Azure Infrastructure for Industrial IoT.",
             "type": "Microsoft.Resources/deployments",
             "apiVersion": "2017-05-10",
-            "name": "[variables('infrastructureResourcName')]",
+            "name": "[variables('minimumInfrastructureResourceName')]",
             "properties": {
                 "mode": "Incremental",
                 "parameters": {
@@ -203,19 +243,13 @@
                     "branchName": {
                         "value": "[parameters('branchName')]"
                     },
-                    "managedIdentityName": {
-                        "value": "[parameters('managedIdentityName')]"
-                    },
-                    "servicePrincipalId": {
-                        "value": "[parameters('servicePrincipalId')]"
-                    },
                     "keyVaultPrincipalId": {
-                        "value": "[parameters('servicePrincipalId')]"
+                        "value": "[parameters('keyVaultPrincipalId')]"
                     }
                 },
                 "templateLink": {
                     "contentVersion": "1.0.0.0",
-                    "uri": "[concat(variables('templateBaseUrl'), 'azuredeploy.infrastructure.json')]"
+                    "uri": "[concat(variables('templateBaseUrl'), 'azuredeploy.minimum.json')]"
                 }
             }
         },
@@ -228,10 +262,14 @@
                 "mode": "Incremental",
                 "parameters": {
                     "keyVaultName": {
-                        "value": "[reference(variables('infrastructureResourceId')).outputs.keyVaultName.value]"
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.keyVaultName.value]"
                     },
                     "configuration": {
                         "value": [
+                            {
+                                "key": "PCS_DEPLOYMENT_LEVEL",
+                                "value": "[variables('infrastructureDeploymentLevel')]"
+                            },
                             {
                                 "key": "PCS_AUTH_REQUIRED",
                                 "value": "[not(empty(parameters('serviceAppId')))]"
@@ -251,6 +289,10 @@
                             {
                                 "key": "PCS_AUTH_CLIENT_SECRET",
                                 "value": "[parameters('clientAppSecret')]"
+                            },
+                            {
+                                "key": "PCS_AUTH_PUBLIC_CLIENT_APPID",
+                                "value": "[parameters('publicClientAppId')]"
                             },
                             {
                                 "key": "PCS_AUTH_SERVICE_APPID",
@@ -293,15 +335,77 @@
                 }
             },
             "dependsOn": [
-                "[variables('infrastructureResourceId')]"
+                "[variables('minimumInfrastructureResourceId')]"
             ]
         },
         {
-            "comments": "Deploy platform.",
+            "comments": "Deploy Azure Infrastructure required by the full Industrial IoT Platform.",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2017-05-10",
+            "name": "[variables('standardInfrastructureResourceName')]",
+            "condition": "[variables('standardInfrastructureDeployment')]",
+            "properties": {
+                "mode": "Incremental",
+                "parameters": {
+                    "templateUrl": {
+                        "value": "[parameters('templateUrl')]"
+                    },
+                    "branchName": {
+                        "value": "[parameters('branchName')]"
+                    },
+                    "datalakeServicePrincipalId": {
+                        "value": "[if(not(empty(parameters('datalakeServicePrincipalId'))), parameters('datalakeServicePrincipalId'), reference(variables('minimumInfrastructureResourceId')).outputs.managedIdentityPrincipalId.value)]"
+                    },
+                    "keyVaultName": {
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.keyVaultName.value]"
+                    },
+                    "dpsIotHubHostName": {
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.iotHubHostName.value]"
+                    },
+                    "dpsIotHubLocation": {
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.iotHubLocation.value]"
+                    },
+                    "eventHubNamespaceName": {
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.eventHubNamespaceName.value]"
+                    },
+                    "eventHubName": {
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.eventHubName.value]"
+                    },
+                    "dpsIotHubConnectionString": {
+                        "reference": {
+                            "keyVault": {
+                                "id": "[resourceId('Microsoft.KeyVault/vaults', reference(variables('minimumInfrastructureResourceId')).outputs.keyVaultName.value)]"
+                            },
+                            "secretName": "pcs-iothub-connstring"
+                        }
+                    },
+                    "tsiStorageName": {
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.storageName.value]"
+                    },
+                    "tsiStorageManagementKey": {
+                        "reference": {
+                            "keyVault": {
+                                "id": "[resourceId('Microsoft.KeyVault/vaults', reference(variables('minimumInfrastructureResourceId')).outputs.keyVaultName.value)]"
+                            },
+                            "secretName": "pcs-storage-key"
+                        }
+                    }
+                },
+                "templateLink": {
+                    "contentVersion": "1.0.0.0",
+                    "uri": "[concat(variables('templateBaseUrl'), 'azuredeploy.standard.json')]"
+                }
+            },
+            "dependsOn": [
+                "[variables('minimumInfrastructureResourceId')]"
+            ]
+        },
+        {
+            "comments": "Deploy Azure Industrial IoT platform.",
             "type": "Microsoft.Resources/deployments",
             "apiVersion": "2017-05-10",
             "name": "[variables('platformResourcName')]",
-            "condition": "[not(and(empty(parameters('siteName')), empty(parameters('serviceSiteName'))))]",
+            "condition": "[variables('platformDeployment')]",
             "properties": {
                 "mode": "Incremental",
                 "parameters": {
@@ -310,24 +414,6 @@
                     },
                     "serviceSiteName": {
                         "value": "[parameters('serviceSiteName')]"
-                    },
-                    "numberOfLinuxGateways": {
-                        "value": "[parameters('numberOfLinuxGateways')]"
-                    },
-                    "numberOfSimulations": {
-                        "value": "[parameters('numberOfSimulations')]"
-                    },
-                    "numberOfWindowsGateways": {
-                        "value": "[parameters('numberOfWindowsGateways')]"
-                    },
-                    "edgeVmSize": {
-                        "value": "[parameters('edgeVmSize')]"
-                    },
-                    "edgeUserName": {
-                        "value": "[parameters('edgeUserName')]"
-                    },
-                    "edgePassword": {
-                        "value": "[parameters('edgePassword')]"
                     },
                     "branchName": {
                         "value": "[parameters('branchName')]"
@@ -338,20 +424,20 @@
                     "templateUrl": {
                         "value": "[parameters('templateUrl')]"
                     },
-                    "keyVaultAppId": {
-                        "value": "[parameters('serviceAppId')]"
-                    },
-                    "keyVaultAppSecret": {
-                        "value": "[parameters('serviceAppSecret')]"
-                    },
                     "keyVaultName": {
-                        "value": "[reference(variables('infrastructureResourceId')).outputs.keyVaultName.value]"
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.keyVaultName.value]"
                     },
                     "keyVaultUri": {
-                        "value": "[reference(variables('infrastructureResourceId')).outputs.keyVaultUri.value]"
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.keyVaultUri.value]"
                     },
                     "managedIdentityResourceId": {
-                        "value": "[reference(variables('infrastructureResourceId')).outputs.managedIdentityResourceId.value]"
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.managedIdentityResourceId.value]"
+                    },
+                    "managedIdentityClientId": {
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.managedIdentityClientId.value]"
+                    },
+                    "managedIdentityTenantId": {
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.managedIdentityTenantId.value]"
                     },
                     "dockerServer": {
                         "value": "[parameters('dockerServer')]"
@@ -375,18 +461,85 @@
                 }
             },
             "dependsOn": [
-                "[variables('infrastructureResourceId')]"
+                "[variables('minimumInfrastructureResourceId')]"
+            ]
+        },
+        {
+            "comments": "Deploy Azure Industrial IoT Edge simulation.",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2017-05-10",
+            "name": "[variables('simulationResourcName')]",
+            "condition": "[variables('simulationDeployment')]",
+            "properties": {
+                "mode": "Incremental",
+                "parameters": {
+                    "simulationProfile": {
+                        "value": "[parameters('simulationProfile')]"
+                    },
+                    "numberOfLinuxGateways": {
+                        "value": "[parameters('numberOfLinuxGateways')]"
+                    },
+                    "numberOfSimulations": {
+                        "value": "[parameters('numberOfSimulations')]"
+                    },
+                    "numberOfWindowsGateways": {
+                        "value": "[parameters('numberOfWindowsGateways')]"
+                    },
+                    "edgeVmSize": {
+                        "value": "[parameters('edgeVmSize')]"
+                    },
+                    "edgeUserName": {
+                        "value": "[parameters('edgeUserName')]"
+                    },
+                    "edgePassword": {
+                        "value": "[parameters('edgePassword')]"
+                    },
+                    "branchName": {
+                        "value": "[parameters('branchName')]"
+                    },
+                    "templateUrl": {
+                        "value": "[parameters('templateUrl')]"
+                    },
+                    "keyVaultName": {
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.keyVaultName.value]"
+                    },
+                    "managedIdentityResourceId": {
+                        "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.managedIdentityResourceId.value]"
+                    },
+                    "dockerServer": {
+                        "value": "[parameters('dockerServer')]"
+                    },
+                    "dockerUser": {
+                        "value": "[parameters('dockerUser')]"
+                    },
+                    "dockerPassword": {
+                        "value": "[parameters('dockerPassword')]"
+                    },
+                    "imagesNamespace": {
+                        "value": "[parameters('imagesNamespace')]"
+                    },
+                    "imagesTag": {
+                        "value": "[parameters('imagesTag')]"
+                    }
+                },
+                "templateLink": {
+                    "contentVersion": "1.0.0.0",
+                    "uri": "[concat(variables('templateBaseUrl'), 'azuredeploy.simulation.json')]"
+                }
+            },
+            "dependsOn": [
+                "[variables('standardInfrastructureResourceId')]"
             ]
         }
     ],
     "outputs": {
         "keyVaultUri": {
             "type": "string",
-            "value": "[reference(variables('infrastructureResourceId')).outputs.keyVaultUri.value]"
+            "value": "[reference(variables('minimumInfrastructureResourceId'), '2017-05-10').outputs.keyVaultUri.value]"
         },
         "tsiUrl": {
             "type": "string",
-            "value": "[reference(variables('infrastructureResourceId')).outputs.tsiUrl.value]"
+            "value": "[if (variables('standardInfrastructureDeployment'), reference(variables('standardInfrastructureResourceId'), '2017-05-10').outputs.tsiUrl.value, '')]"
         },
         "tenantId": {
             "type": "string",

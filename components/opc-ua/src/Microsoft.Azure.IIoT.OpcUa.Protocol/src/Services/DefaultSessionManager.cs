@@ -7,6 +7,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
     using Microsoft.Azure.IIoT.OpcUa.Protocol.Exceptions;
     using Microsoft.Azure.IIoT.OpcUa.Protocol.Models;
     using Microsoft.Azure.IIoT.OpcUa.Core.Models;
+    using Microsoft.Azure.IIoT.Module;
     using Microsoft.Azure.IIoT.Utils;
     using Opc.Ua;
     using Opc.Ua.Client;
@@ -30,77 +31,195 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
         /// Create session manager
         /// </summary>
         /// <param name="clientConfig"></param>
+        /// <param name="identity"></param>
         /// <param name="logger"></param>
-        public DefaultSessionManager(IClientServicesConfig2 clientConfig, ILogger logger) {
-            _logger = logger;
+        public DefaultSessionManager(IClientServicesConfig clientConfig,
+            IIdentity identity, ILogger logger) {
             _clientConfig = clientConfig;
+            _logger = logger;
+            _identity = identity;
             _lock = new SemaphoreSlim(1, 1);
         }
 
         /// <inheritdoc/>
         public async Task<Session> GetOrCreateSessionAsync(ConnectionModel connection,
-            bool createIfNotExists) {
+            bool createIfNotExists, bool forceActivation) {
 
             // Find session and if not exists create
             var id = new ConnectionIdentifier(connection);
             await _lock.WaitAsync();
             try {
-                if (!_sessions.TryGetValue(id, out var wrapper) && createIfNotExists) {
-                    var sessionName = id.ToString();
-                    var applicationConfiguration = _clientConfig.ToApplicationConfiguration(true);
-                    var endpointConfiguration = _clientConfig.ToEndpointConfiguration();
-                    var endpointDescription = SelectEndpoint(id.Connection.Endpoint.Url, id.Connection.Endpoint.SecurityMode, id.Connection.Endpoint.SecurityPolicy, (int)(connection.Endpoint.OperationTimeout.HasValue ? connection.Endpoint.OperationTimeout.Value.TotalMilliseconds : defaultOperationTimeout));
-
-                    if (endpointDescription == null) {
-                        throw new EndpointNotAvailableException(id.Connection.Endpoint.Url, id.Connection.Endpoint.SecurityMode, id.Connection.Endpoint.SecurityPolicy);
-                    }
-
-                    if (id.Connection.Endpoint.SecurityMode.HasValue && id.Connection.Endpoint.SecurityMode != SecurityMode.None && endpointDescription.SecurityMode == MessageSecurityMode.None) {
-                        _logger.Warning("Although the use of security was configured, there was no security-enabled endpoint available at url {endpointUrl}. An endpoint with no security will be used.", id.Connection.Endpoint.Url);
-                    }
-
-                    var configuredEndpoint = new ConfiguredEndpoint(
-                        null, endpointDescription, endpointConfiguration);
-
-                    _logger.Information("Trying to create session {sessionName}...",
-                        sessionName);
-                    using (new PerfMarker(_logger, sessionName)) {
-                        var userIdentity = connection.User.ToStackModel() ??
-                            new UserIdentity(new AnonymousIdentityToken());
-                        var session = await Session.Create(
-                            applicationConfiguration, configuredEndpoint,
-                            true, sessionName, _clientConfig.DefaultSessionTimeout,
-                            userIdentity, null);
-
-                        _logger.Information($"Session '{sessionName}' created.");
-
-                        _logger.Information("Loading Complex Type System....");
-
+                // try to get an existing session
+                if (_sessions.TryGetValue(id, out var wrapper)) {
+                    if (wrapper != null && 
+                        (forceActivation || !wrapper.Session.Connected || 
+                        wrapper.MissedKeepAlives >= wrapper.MaxKeepAlives)) {
+                        // attempt to reactivate 
+                        bool dispose = true;
                         try {
-                            var complexTypeSystem = new ComplexTypeSystem(session);
-                            await complexTypeSystem.Load();
-                            _logger.Information("Complex Type system loaded.");
+                            wrapper.Session.Reconnect();
+                        }
+                        catch (ServiceResultException ex) {
+                            if (ex.StatusCode == StatusCodes.BadNotConnected) {
+                                dispose = false;
+                            }
+                            else {
+                                _logger.Warning("Failed to reconnect session {sessionName}. Dispose and create new",
+                                    wrapper.Session.SessionName, ex.Message);
+                            }
+                        }
+                        catch (Exception ex){
+                            _logger.Warning("Failed to reconnect session {sessionName}. Dispose and create new",
+                                wrapper.Session.SessionName, ex.Message);
+                        }
+                        finally {
+                            if (dispose) {
+                                //  todo check status codes
+                                _sessions.Remove(id);
+                                // Remove subscriptions
+                                if (wrapper.Session.SubscriptionCount > 0) {
+                                    foreach (var subscription in wrapper.Session.Subscriptions) {
+                                        Try.Op(() => subscription.RemoveItems(subscription.MonitoredItems));
+                                        Try.Op(() => subscription.DeleteItems());
+                                    }
+                                    Try.Op(() => wrapper.Session.RemoveSubscriptions(wrapper.Session.Subscriptions));
+                                }
+                                Try.Op(wrapper.Session.Close);
+                                Try.Op(wrapper.Session.Dispose);
+                                wrapper = null;
+                            }
+                        }
+                    }
+                }
+
+                if (wrapper == null && createIfNotExists) {
+                    var endpointUrlCandidates = id.Connection.Endpoint.Url.YieldReturn();
+                    if (id.Connection.Endpoint.AlternativeUrls != null) {
+                        endpointUrlCandidates = endpointUrlCandidates.Concat(
+                            id.Connection.Endpoint.AlternativeUrls);
+                    }
+                    var exceptions = new List<Exception>();
+                    foreach (var endpointUrl in endpointUrlCandidates) {
+                        try {
+                            wrapper = await CreateSessionAsync(endpointUrl, id);
+                            if (wrapper?.Session != null) {
+                                _logger.Information("Connected on {endpointUrl}", endpointUrl);
+                                _sessions.Add(id, wrapper);
+                                return wrapper?.Session;
+                            }
                         }
                         catch (Exception ex) {
-                            _logger.Error(ex, "Failed to load Complex Type System");
+                            _logger.Debug("Failed to connect on {endpointUrl}: {message} - try again...",
+                                endpointUrl, ex.Message);
+                            exceptions.Add(ex);
                         }
-
-                        if (_clientConfig.KeepAliveInterval > 0) {
-                            session.KeepAliveInterval = _clientConfig.KeepAliveInterval;
-                            session.KeepAlive += Session_KeepAlive;
-                        }
-                        wrapper = new SessionWrapper {
-                            MissedKeepAlives = 0,
-                            MaxKeepAlives = _clientConfig.MaxKeepAliveCount,
-                            Session = session
-                        };
-                        _sessions.Add(id, wrapper);
                     }
+                    throw new AggregateException(exceptions);
                 }
                 return wrapper?.Session;
             }
+            catch (Exception ex) {
+                _logger.Error(ex, "Failed to get or create session.");
+                return null;
+            }
             finally {
                 _lock.Release();
+            }
+        }
+
+        /// <summary>
+        /// Create session against endpoint
+        /// </summary>
+        /// <param name="endpointUrl"></param>
+        /// <param name="id"></param>
+        /// <returns></returns>
+        private async Task<SessionWrapper> CreateSessionAsync(string endpointUrl,
+            ConnectionIdentifier id) {
+            var sessionName = id.ToString();
+
+            // Validate certificates
+            void OnValidate(CertificateValidator sender, CertificateValidationEventArgs e) {
+                if (!e.Accept && e.Error.StatusCode == StatusCodes.BadCertificateUntrusted) {
+                    // Validate thumbprint provided
+                    if (e.Certificate.RawData != null &&
+                        id.Connection.Endpoint.Certificate != null &&
+                        e.Certificate.Thumbprint == id.Connection.Endpoint.Certificate) {
+                        // Validate
+                        e.Accept = true;
+                    }
+                    else if(_clientConfig.AutoAcceptUntrustedCertificates) {
+                        _logger.Warning("Publisher is configured to accept untrusted certs.  " +
+                            "Accepting untrusted certificate on endpoint {endpointUrl}",
+                            endpointUrl);
+                        e.Accept = true;
+                    }
+                }
+            };
+
+            var applicationConfiguration = await _clientConfig.
+                ToApplicationConfigurationAsync(_identity, true, OnValidate);
+            var endpointConfiguration = _clientConfig.ToEndpointConfiguration();
+
+            var endpointDescription = SelectEndpoint(endpointUrl,
+                id.Connection.Endpoint.SecurityMode, id.Connection.Endpoint.SecurityPolicy,
+                (int)(id.Connection.OperationTimeout.HasValue ?
+                    id.Connection.OperationTimeout.Value.TotalMilliseconds :
+                    kDefaultOperationTimeout));
+
+            if (endpointDescription == null) {
+                throw new EndpointNotAvailableException(endpointUrl,
+                    id.Connection.Endpoint.SecurityMode, id.Connection.Endpoint.SecurityPolicy);
+            }
+
+            if (id.Connection.Endpoint.SecurityMode.HasValue &&
+                id.Connection.Endpoint.SecurityMode != SecurityMode.None &&
+                endpointDescription.SecurityMode == MessageSecurityMode.None) {
+                _logger.Warning("Although the use of security was configured, " +
+                    "there was no security-enabled endpoint available at url " +
+                    "{endpointUrl}. An endpoint with no security will be used.",
+                    endpointUrl);
+            }
+
+            var configuredEndpoint = new ConfiguredEndpoint(
+                null, endpointDescription, endpointConfiguration);
+
+            _logger.Information("Trying to create session {sessionName}...",
+                sessionName);
+            using (new PerfMarker(_logger, sessionName)) {
+                var userIdentity = id.Connection.User.ToStackModel() ??
+                    new UserIdentity(new AnonymousIdentityToken());
+                var session = await Session.Create(
+                    applicationConfiguration, configuredEndpoint,
+                    true, sessionName, _clientConfig.DefaultSessionTimeout,
+                    userIdentity, null);
+
+                if (sessionName != session.SessionName) {
+                    _logger.Warning("Session '{sessionName}' created with a revised name '{name}'",
+                        sessionName, session.SessionName);
+                }
+                _logger.Information("Session '{sessionName}' created.", sessionName);
+                
+                _logger.Information("Loading Complex Type System....");
+                try {
+                    var complexTypeSystem = new ComplexTypeSystem(session);
+                    await complexTypeSystem.Load();
+                    _logger.Information("Complex Type system loaded.");
+                }
+                catch (Exception ex) {
+                    _logger.Error(ex, "Failed to load Complex Type System");
+                }
+
+                if (_clientConfig.KeepAliveInterval > 0) {
+                    session.KeepAliveInterval = _clientConfig.KeepAliveInterval;
+                    session.KeepAlive += Session_KeepAlive;
+                    session.Notification += Session_Notification;
+                }
+                var wrapper = new SessionWrapper {
+                    MissedKeepAlives = 0,
+                    MaxKeepAlives = _clientConfig.MaxKeepAliveCount,
+                    Session = session
+                };
+                return wrapper;
             }
         }
 
@@ -126,13 +245,33 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
                     }
                     Try.Op(() => session.RemoveSubscriptions(session.Subscriptions));
                 }
-                
-                
                 Try.Op(session.Close);
                 Try.Op(session.Dispose);
             }
             finally {
                 _lock.Release();
+            }
+        }
+        /// <summary>
+        /// callback to report session's notifications
+        /// </summary>
+        /// <param name="session"></param>
+        /// <param name="e"></param>
+        private void Session_Notification(Session session, NotificationEventArgs e) {
+            _logger.Debug("Notification for session: {Session}, subscription {Subscription} -sequence# {Sequence}-{PublishTime}",
+                session.SessionName, e.Subscription?.DisplayName, e.NotificationMessage?.SequenceNumber,
+                e.NotificationMessage.PublishTime);
+            if (e.NotificationMessage.IsEmpty || e.NotificationMessage.NotificationData.Count() == 0) {
+                var keepAlive = new DataChangeNotification() {
+                    MonitoredItems = new MonitoredItemNotificationCollection() {
+                        new MonitoredItemNotification() {
+                            ClientHandle = 0,
+                            Value = null,
+                            Message = e.NotificationMessage
+                        }
+                    }
+                };
+                e.Subscription.FastDataChangeCallback.Invoke(e.Subscription, keepAlive, e.StringTable);
             }
         }
 
@@ -142,26 +281,41 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
         /// <param name="session"></param>
         /// <param name="e"></param>
         private void Session_KeepAlive(Session session, KeepAliveEventArgs e) {
-            _logger.Debug($"Keep Alive received from session {session.SessionName}, state: {e.CurrentState}.");
-            if (ServiceResult.IsGood(e.Status)) {
-                return;
-            }
+            _logger.Debug("Keep Alive received from session {name}, state: {state}.",
+                session.SessionName, e.CurrentState);
             _lock.Wait();
             try {
-                var entry = _sessions.SingleOrDefault(s => s.Value.Session.SessionName == session.SessionName);
-                if (entry.Key == null) {
-                    return;
+                foreach (var entry in _sessions
+                    .Where(s => s.Value.Session.SessionId == session.SessionId).ToList()) {
+                    if (ServiceResult.IsGood(e.Status)) {
+                        entry.Value.MissedKeepAlives = 0;
+                    }
+                    else {
+                        entry.Value.MissedKeepAlives++;
+                        if (entry.Value.MissedKeepAlives >= entry.Value.MaxKeepAlives) {
+                            _logger.Warning("Session '{name}' exceeded max keep alive count. " +
+                                "Disconnecting and removing session...", session.SessionName);
+                            // TODO - implement a session level retry mechanism.
+                            // for now rely on the subscription's reconnection logic
+                            /*
+                            _sessions.Remove(entry.Key);
+                            // Remove subscriptions
+                            if (session.SubscriptionCount > 0) {
+                                foreach (var subscription in session.Subscriptions) {
+                                    Try.Op(() => subscription.RemoveItems(subscription.MonitoredItems));
+                                    Try.Op(() => subscription.DeleteItems());
+                                }
+                                Try.Op(() => session.RemoveSubscriptions(session.Subscriptions));
+                            }
+                            Try.Op(session.Close);
+                            Try.Op(session.Dispose);
+                            */
+                        }
+                        _logger.Warning("{missedKeepAlives}/{_maxKeepAlives} missed keep " +
+                            "alives from session '{name}'...",
+                            entry.Value.MissedKeepAlives, entry.Value.MaxKeepAlives, session.SessionName);
+                    }
                 }
-                entry.Value.MissedKeepAlives++;
-                if (entry.Value.MissedKeepAlives >= entry.Value.MaxKeepAlives) {
-                    _logger.Warning("Session '{name}' exceeded max keep alive count. Disconnecting and removing session...",
-                        session.SessionName);
-                    _sessions.Remove(entry.Key);
-                    Try.Op(session.Close);
-                    Try.Op(session.Dispose);
-                }
-                _logger.Warning("{missedKeepAlives}/{_maxKeepAlives} missed keep alives from session '{name}'...",
-                    entry.Value.MissedKeepAlives, entry.Value.MaxKeepAlives, session.SessionName);
             }
             finally {
                 _lock.Release();
@@ -172,13 +326,17 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
             if (!securityMode.HasValue) {
                 return null;
             }
-
             switch (securityMode.Value) {
-                case SecurityMode.Best: throw new NotSupportedException("The security mode 'best' is not supported in this scenario.");
-                case SecurityMode.None: return MessageSecurityMode.None;
-                case SecurityMode.Sign: return MessageSecurityMode.Sign;
-                case SecurityMode.SignAndEncrypt: return MessageSecurityMode.SignAndEncrypt;
-                default: throw new NotImplementedException($"The security mode '{securityMode}' is not implemented.");
+                case SecurityMode.Best:
+                    throw new NotSupportedException("The security mode 'best' is not supported.");
+                case SecurityMode.None:
+                    return MessageSecurityMode.None;
+                case SecurityMode.Sign:
+                    return MessageSecurityMode.Sign;
+                case SecurityMode.SignAndEncrypt:
+                    return MessageSecurityMode.SignAndEncrypt;
+                default:
+                    throw new NotSupportedException($"The security mode '{securityMode}' is not implemented.");
             }
         }
 
@@ -189,18 +347,23 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
         /// <param name="securityMode">The requested message security mode.</param>
         /// <param name="securityPolicyUri">The requested securityPolicyUrl.</param>
         /// <param name="operationTimeout">Operation timeout</param>
-        /// <returns>Endpoint with the selected security settings or null of none available.</returns>
-        private static EndpointDescription SelectEndpoint(string discoveryUrl, SecurityMode? securityMode, string securityPolicyUri, int operationTimeout = -1) {
-            //if no security settings are specified or is set to 'Best', we use the best available. However, this can result in an endpoint with SecurityMode = None when no
-            //security enabled endpoint is available.
-            if ((!securityMode.HasValue && string.IsNullOrWhiteSpace(securityPolicyUri)) || securityMode == SecurityMode.Best) {
+        /// <returns>Endpoint with the selected security settings or null of none
+        /// available.</returns>
+        private static EndpointDescription SelectEndpoint(string discoveryUrl,
+            SecurityMode? securityMode, string securityPolicyUri, int operationTimeout = -1) {
+            // if no security settings are specified or is set to 'Best', we use the best
+            // available. However, this can result in an endpoint with SecurityMode = None when no
+            // security enabled endpoint is available.
+            if ((!securityMode.HasValue && string.IsNullOrWhiteSpace(securityPolicyUri)) ||
+                securityMode == SecurityMode.Best) {
                 return CoreClientUtils.SelectEndpoint(discoveryUrl, true, operationTimeout);
             }
             else if (securityMode == SecurityMode.None || securityPolicyUri == SecurityPolicies.None) {
                 return CoreClientUtils.SelectEndpoint(discoveryUrl, false, operationTimeout);
             }
             else {
-                return SelectEndpoint(discoveryUrl, ToMessageSecurityMode(securityMode), securityPolicyUri, operationTimeout);
+                return SelectEndpoint(discoveryUrl, ToMessageSecurityMode(securityMode),
+                    securityPolicyUri, operationTimeout);
             }
         }
 
@@ -212,7 +375,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
         /// <param name="securityPolicyUri">The requested securityPolicyUrl.</param>
         /// <param name="operationTimeout">Operation timeout</param>
         /// <returns>Endpoint with the selected security settings or null of none available.</returns>
-        private static EndpointDescription SelectEndpoint(string discoveryUrl, MessageSecurityMode? messageSecurityMode, string securityPolicyUri, int operationTimeout = -1) {
+        private static EndpointDescription SelectEndpoint(string discoveryUrl,
+            MessageSecurityMode? messageSecurityMode, string securityPolicyUri, int operationTimeout = -1) {
             if (messageSecurityMode == MessageSecurityMode.None || securityPolicyUri == SecurityPolicies.None) {
                 return CoreClientUtils.SelectEndpoint(discoveryUrl, false, operationTimeout);
             }
@@ -225,7 +389,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
             }
 
             // parse the selected URL.
-            Uri uri = new Uri(discoveryUrl);
+            var uri = new Uri(discoveryUrl);
 
             var configuration = EndpointConfiguration.Create();
             if (operationTimeout > 0) {
@@ -239,11 +403,13 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
                 IEnumerable<EndpointDescription> filteredEndpoints = endpoints.ToArray();
 
                 if (messageSecurityMode.HasValue) {
-                    filteredEndpoints = filteredEndpoints.Where(e => e.SecurityMode == messageSecurityMode.Value);
+                    filteredEndpoints = filteredEndpoints
+                        .Where(e => e.SecurityMode == messageSecurityMode.Value);
                 }
 
                 if (!string.IsNullOrWhiteSpace(securityPolicyUri)) {
-                    filteredEndpoints = filteredEndpoints.Where(e => e.SecurityPolicyUri == securityPolicyUri);
+                    filteredEndpoints = filteredEndpoints
+                        .Where(e => e.SecurityPolicyUri == securityPolicyUri);
                 }
 
                 return filteredEndpoints.OrderByDescending(e => e.SecurityLevel).FirstOrDefault();
@@ -298,10 +464,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
         }
 
         private readonly ILogger _logger;
-        private readonly IClientServicesConfig2 _clientConfig;
+        private readonly IClientServicesConfig _clientConfig;
+        private readonly IIdentity _identity;
         private readonly Dictionary<ConnectionIdentifier, SessionWrapper> _sessions =
             new Dictionary<ConnectionIdentifier, SessionWrapper>();
         private readonly SemaphoreSlim _lock;
-        private const int defaultOperationTimeout = 15000;
+        private const int kDefaultOperationTimeout = 15000;
     }
 }

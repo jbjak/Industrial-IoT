@@ -25,7 +25,8 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Runtime {
     /// <summary>
     /// Class that represents a dictionary with all command line arguments from the legacy version of the OPC Publisher
     /// </summary>
-    public class LegacyCliOptions : Dictionary<string, string>, IAgentConfigProvider, IEngineConfiguration, ILegacyCliModelProvider {
+    public class LegacyCliOptions : Dictionary<string, string>, IAgentConfigProvider,
+        IEngineConfiguration, ILegacyCliModelProvider {
         /// <summary>
         /// Empty constructor.
         /// </summary>
@@ -144,15 +145,21 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Runtime {
                     { "ip|issuercertstorepath=", "the path of the trusted issuer cert store.",
                         s => this[LegacyCliConfigKeys.OpcIssuerCertStorePath] = s },
                     { "it|issuercertstoretype=", "Legacy - do not use.", _ => {} },
+                    { "bs|batchsize=", "the size of message batching buffer.",
+                        (int i) => this[LegacyCliConfigKeys.BatchSize] = i.ToString() },
+                    { "si|iothubsendinterval=", "the trigger batching intervaql in seconds",
+                        (int k) => this[LegacyCliConfigKeys.BatchTriggerInterval] = TimeSpan.FromSeconds(k).ToString() },
+                    { "ms|iothubmessagesize=", "the maximum size of the (IoT D2C) message.",
+                        (int i) => this[LegacyCliConfigKeys.MaxMessageSize] = i.ToString() },
+                    { "sc|scaletestcount=", "the number of monitored item clones in scale tests",
+                        (int i) => this[LegacyCliConfigKeys.ScaleTestCount] = i.ToString() },
 
                     // Legacy unsupported
-                    { "si|iothubsendinterval=", "Legacy - do not use.", _ => {} },
                     { "tc|telemetryconfigfile=", "Legacy - do not use.", _ => {} },
                     { "ic|iotcentral=", "Legacy - do not use.", _ => {} },
                     { "mq|monitoreditemqueuecapacity=", "Legacy - do not use.", _ => {} },
                     { "ns|noshutdown=", "Legacy - do not use.", _ => {} },
                     { "rf|runforever", "Legacy - do not use.", _ => {} },
-                    { "ms|iothubmessagesize=", "Legacy - do not use.", _ => {} },
                     { "pn|portnum=", "Legacy - do not use.", _ => {} },
                     { "pa|path=", "Legacy - do not use.", _ => {} },
                     { "lr|ldsreginterval=", "Legacy - do not use.", _ => {} },
@@ -185,7 +192,7 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Runtime {
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public bool RunInLegacyMode => System.IO.File.Exists(GetValueOrDefault(LegacyCliConfigKeys.PublisherNodeConfigurationFilename, LegacyCliConfigKeys.DefaultPublishedNodesFilename));
 
@@ -202,14 +209,24 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Runtime {
 #pragma warning restore 67
 
         /// <summary>
-        /// The batch size, hardcoded to 1.
+        /// The batch size 
         /// </summary>
-        public int? BatchSize => 1;
+        public int? BatchSize => LegacyCliModel.BatchSize;
+
+        /// <summary>
+        /// The interval to show diagnostic information in the log.
+        /// </summary>
+        public TimeSpan? BatchTriggerInterval => LegacyCliModel.BatchTriggerInterval;
 
         /// <summary>
         /// The interval to show diagnostic information in the log.
         /// </summary>
         public TimeSpan? DiagnosticsInterval => LegacyCliModel.DiagnosticsInterval;
+
+        /// <summary>
+        /// the Maximum (IoT D2C) message size 
+        /// </summary>
+        public int? MaxMessageSize => LegacyCliModel.MaxMessageSize;
 
         /// <summary>
         /// The model of the CLI arguments.
@@ -259,7 +276,11 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Runtime {
                 ApplicationCertificateStorePath = GetValueOrDefault<string>(LegacyCliConfigKeys.OpcOwnCertStorePath),
                 TrustedPeerCertificatesPath = GetValueOrDefault<string>(LegacyCliConfigKeys.OpcTrustedCertStorePath),
                 RejectedCertificateStorePath = GetValueOrDefault<string>(LegacyCliConfigKeys.OpcRejectedCertStorePath),
-                TrustedIssuerCertificatesPath = GetValueOrDefault<string>(LegacyCliConfigKeys.OpcIssuerCertStorePath)
+                TrustedIssuerCertificatesPath = GetValueOrDefault<string>(LegacyCliConfigKeys.OpcIssuerCertStorePath),
+                BatchSize = GetValueOrDefault<int?>(LegacyCliConfigKeys.BatchSize, 1),
+                BatchTriggerInterval = GetValueOrDefault<TimeSpan?>(LegacyCliConfigKeys.BatchTriggerInterval),
+                MaxMessageSize = GetValueOrDefault<int?>(LegacyCliConfigKeys.MaxMessageSize, 0),
+                ScaleTestCount = GetValueOrDefault<int?>(LegacyCliConfigKeys.ScaleTestCount, 1)
             };
         }
 

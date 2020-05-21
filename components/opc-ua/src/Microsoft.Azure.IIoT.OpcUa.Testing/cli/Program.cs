@@ -7,7 +7,6 @@ namespace Microsoft.Azure.IIoT.OpcUa.Cli {
     using Microsoft.Azure.IIoT.OpcUa.Core.Models;
     using Microsoft.Azure.IIoT.OpcUa.Edge.Control.Services;
     using Microsoft.Azure.IIoT.OpcUa.Edge.Export.Services;
-    using Microsoft.Azure.IIoT.OpcUa.Graph.Services;
     using Microsoft.Azure.IIoT.OpcUa.Protocol;
     using Microsoft.Azure.IIoT.OpcUa.Protocol.Sample;
     using Microsoft.Azure.IIoT.OpcUa.Protocol.Services;
@@ -19,6 +18,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Cli {
     using Microsoft.Azure.IIoT.Storage.Default;
     using Microsoft.Azure.IIoT.Diagnostics;
     using Microsoft.Azure.IIoT.Module;
+    using Microsoft.Azure.IIoT.Serializers;
+    using Microsoft.Azure.IIoT.Serializers.NewtonSoft;
     using Newtonsoft.Json;
     using Opc.Ua;
     using Opc.Ua.Design;
@@ -31,6 +32,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Cli {
     using System.IO;
     using System.IO.Compression;
     using System.Linq;
+    using System.Net;
     using System.Runtime.Loader;
     using System.Text;
     using System.Threading;
@@ -61,7 +63,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Cli {
             var op = Op.None;
             var endpoint = new EndpointModel();
             string fileName = null;
-            var host = Utils.GetHostName();
+            var host = Dns.GetHostName();
             var ports = new List<int>();
             try {
                 for (var i = 0; i < args.Length; i++) {
@@ -278,7 +280,10 @@ Operations (Mutually exclusive):
             }
 
             /// <inheritdoc/>
-            public string DeviceId { get; } = "";
+            public string Gateway => Dns.GetHostName();
+
+            /// <inheritdoc/>
+            public string DeviceId => Gateway;
 
             /// <inheritdoc/>
             public string ModuleId { get; } = "";
@@ -328,12 +333,12 @@ Operations (Mutually exclusive):
             }
 
             /// <inheritdoc/>
-            public Task ReportAsync(string propertyId, dynamic value) {
+            public Task ReportAsync(string propertyId, VariantValue value) {
                 return Task.CompletedTask;
             }
 
             /// <inheritdoc/>
-            public Task ReportAsync(IEnumerable<KeyValuePair<string, dynamic>> properties) {
+            public Task ReportAsync(IEnumerable<KeyValuePair<string, VariantValue>> properties) {
                 return Task.CompletedTask;
             }
 
@@ -452,16 +457,18 @@ Operations (Mutually exclusive):
                 }
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
-                IDatabaseServer database = new MemoryDatabase(logger.Logger);
+                var serializer = new NewtonSoftJsonSerializer();
+                IDatabaseServer database = new MemoryDatabase(logger.Logger, serializer);
                 for (var i = 0; ; i++) {
                     Console.WriteLine($"{i}: Writing from {filename}...");
                     var sw = Stopwatch.StartNew();
                     using (var file = File.Open(filename, FileMode.OpenOrCreate)) {
                         using (var unzipped = new DeflateStream(file, CompressionMode.Decompress)) {
-                            var writer = new SourceStreamImporter(new ItemContainerFactory(database),
-                                new VariantEncoderFactory(), logger.Logger);
-                            await writer.ImportAsync(unzipped, Path.GetFullPath(filename + i),
-                                ContentMimeType.UaJson, null, CancellationToken.None);
+                           // TODO
+                           // var writer = new SourceStreamImporter(new ItemContainerFactory(database),
+                           //     new VariantEncoderFactory(), logger.Logger);
+                           // await writer.ImportAsync(unzipped, Path.GetFullPath(filename + i),
+                           //     ContentMimeType.UaJson, null, CancellationToken.None);
                         }
                     }
                     var elapsed = sw.Elapsed;
@@ -554,7 +561,8 @@ Operations (Mutually exclusive):
                                 var result = await service.NodeBrowseAsync(endpoint, request);
                                 visited.Add(request.NodeId);
                                 if (!silent) {
-                                    Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
+                                    Console.WriteLine(JsonConvert.SerializeObject(result,
+                                        Formatting.Indented));
                                 }
 
                                 // Do recursive browse
@@ -583,7 +591,8 @@ Operations (Mutually exclusive):
                                                 NodeId = r.Target.NodeId
                                             });
                                         if (!silent) {
-                                            Console.WriteLine(JsonConvert.SerializeObject(result, Formatting.Indented));
+                                            Console.WriteLine(JsonConvert.SerializeObject(result,
+                                                Formatting.Indented));
                                         }
                                     }
                                     catch (Exception ex) {
@@ -617,7 +626,7 @@ Operations (Mutually exclusive):
                 _cts = new CancellationTokenSource();
                 if (endpoint.Url == null) {
                     _server = RunSampleServerAsync(_cts.Token, logger.Logger);
-                    endpoint.Url = "opc.tcp://" + Utils.GetHostName() +
+                    endpoint.Url = "opc.tcp://" + Dns.GetHostName() +
                         ":51210/UA/SampleServer";
                 }
                 else {

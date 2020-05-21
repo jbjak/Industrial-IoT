@@ -232,14 +232,24 @@ namespace Opc.Ua.Encoders {
         /// <inheritdoc/>
         public void WriteInt64(string property, long value) {
             if (PreWriteValue(property, value)) {
-                _writer.WriteValue(value);
+                if (UseAdvancedEncoding) {
+                    _writer.WriteValue(value);
+                }
+                else {
+                    _writer.WriteValue(value.ToString());
+                }
             }
         }
 
         /// <inheritdoc/>
         public void WriteUInt64(string property, ulong value) {
             if (PreWriteValue(property, value)) {
-                _writer.WriteValue(value);
+                if (UseAdvancedEncoding) {
+                    _writer.WriteValue(value);
+                }
+                else {
+                    _writer.WriteValue(value.ToString());
+                }
             }
         }
 
@@ -294,8 +304,7 @@ namespace Opc.Ua.Encoders {
                 if (!string.IsNullOrEmpty(property)) {
                     _writer.WritePropertyName(property);
                 }
-                _writer.WriteValue(XmlConvert.ToString(value,
-                    XmlDateTimeSerializationMode.RoundtripKind));
+                _writer.WriteValue(value.ToOpcUaJsonEncodedTime());
             }
         }
 
@@ -353,7 +362,7 @@ namespace Opc.Ua.Encoders {
                     _writer.WritePropertyName(property);
                 }
                 if (PerformXmlSerialization || UseAdvancedEncoding) {
-                    var json = JsonConvertEx.SerializeObject(value);
+                    var json = JsonConvert.SerializeObject(value);
                     _writer.WriteRawValue(json);
                 }
                 else {
@@ -398,10 +407,10 @@ namespace Opc.Ua.Encoders {
                 }
                 switch (value.NamespaceIndex) {
                     case 0:
-                        // default namespace - nothing to do 
+                        // default namespace - nothing to do
                         break;
                     case 1:
-                        // always as integer 
+                        // always as integer
                         WriteUInt16("Namespace", value.NamespaceIndex);
                         break;
                     default:
@@ -452,14 +461,14 @@ namespace Opc.Ua.Encoders {
                 }
                 switch (value.NamespaceIndex) {
                     case 0:
-                        // default namespace - nothing to do 
+                        // default namespace - nothing to do
                         break;
                     case 1:
                         // namespace 1 always as integer
                         WriteUInt16("Namespace", value.NamespaceIndex);
                         break;
                     default:
-                        var namespaceUri = UseReversibleEncoding ? 
+                        var namespaceUri = UseReversibleEncoding ?
                             null : Context.NamespaceUris.GetString(value.NamespaceIndex);
                         if (namespaceUri != null) {
                             WriteString("Namespace", namespaceUri);
@@ -542,7 +551,7 @@ namespace Opc.Ua.Encoders {
                 WriteNull(property);
             }
             else if (UseReversibleEncoding) {
-                if (UseUriEncoding || UseAdvancedEncoding) {
+                if (UseUriEncoding && UseAdvancedEncoding) {
                     WriteString(property, value.AsString(Context));
                 }
                 else {
@@ -568,7 +577,7 @@ namespace Opc.Ua.Encoders {
             if (LocalizedText.IsNullOrEmpty(value)) {
                 WriteNull(property);
             }
-            else if (UseReversibleEncoding || value.Locale != null) {
+            else if (UseReversibleEncoding) {
                 PushObject(property);
                 WriteString("Text", value.Text);
                 if (!string.IsNullOrEmpty(value.Locale)) {
@@ -793,7 +802,7 @@ namespace Opc.Ua.Encoders {
                     }
                 }
                 else {
-                    _writer.WriteValue($"{value}_{numeric}");
+                    WriteString(property, $"{value}_{numeric}");
                 }
             }
         }
@@ -1210,6 +1219,11 @@ namespace Opc.Ua.Encoders {
                     WriteNull(null);
                     return;
                 }
+
+                // TODO: JSON array encoding only for
+                // non reversible encoding, otherwise
+                // flatten array and add Dimension.
+                // if (!UseReversibleEncoding) {
                 if (value is Matrix matrix) {
                     var index = 0;
                     WriteMatrix(matrix, 0, ref index, builtInType);
@@ -1232,15 +1246,20 @@ namespace Opc.Ua.Encoders {
             if (value == null) {
                 return default;
             }
-            if (value is object[] o) {
-                return o.Cast<T>().ToArray();
+            try {
+                if (value is object[] o) {
+                    return o.Cast<T>().ToArray();
+                }
+                if (value is T[] t) {
+                    return t;
+                }
+                return ToTypedScalar<T>(value).YieldReturn().ToArray();
             }
-            if (value is T[] t) {
-                return t;
+            catch (Exception ex) {
+                throw new ServiceResultException(StatusCodes.BadEncodingError,
+                    $"Bad variant: Value '{value}' of type '{value.GetType().FullName}' is not " +
+                    $"a one dimensional array of type '{typeof(T).GetType().FullName}'.", ex);
             }
-            throw new ServiceResultException(StatusCodes.BadEncodingError,
-                $"Bad variant: Value '{value}' of type '{value.GetType().FullName}' is not " +
-                $"an array of type '{typeof(T).GetType().FullName}'.");
         }
 
         /// <summary>
@@ -1250,15 +1269,20 @@ namespace Opc.Ua.Encoders {
         /// <param name="value"></param>
         /// <returns></returns>
         private T ToTypedScalar<T>(object value) {
-            if (value == null) {
-                return default;
+            try {
+                if (value == null) {
+                    return default;
+                }
+                if (value is T t) {
+                    return t;
+                }
+                return (T)value;
             }
-            if (value is T t) {
-                return t;
+            catch (Exception ex) {
+                throw new ServiceResultException(StatusCodes.BadEncodingError,
+                    $"Bad variant: Value '{value}' of type '{value.GetType().FullName}' is not " +
+                    $"a scalar of type '{typeof(T).GetType().FullName}'.", ex);
             }
-            throw new ServiceResultException(StatusCodes.BadEncodingError,
-                $"Bad variant: Value '{value}' of type '{value.GetType().FullName}' is not " +
-                $"a scalar of type '{typeof(T).GetType().FullName}'.");
         }
 
         /// <summary>
@@ -1388,7 +1412,7 @@ namespace Opc.Ua.Encoders {
         /// <param name="values"></param>
         /// <param name="writer"></param>
         private void WriteDictionary<T>(string property, IDictionary<string, T> values,
-            Action<string,T> writer) {
+            Action<string, T> writer) {
             if (values == null) {
                 WriteNull(property);
             }
@@ -1403,7 +1427,7 @@ namespace Opc.Ua.Encoders {
         /// <summary>
         /// Check whether to write the simple value.  If so
         /// andthis is not called in the context of array
-        /// write (property is null) write property.
+        /// write (property == null) write property.
         /// </summary>
         /// <param name="property"></param>
         /// <param name="value"></param>

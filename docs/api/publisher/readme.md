@@ -23,8 +23,9 @@ Azure Industrial IoT OPC UA Publisher Service
 
 ### Tags
 
-* Monitor : Value and Event monitoring services
+* Jobs : Jobs controller
 * Publish : Value and Event publishing services
+* Workers : Agent controller
 
 
 
@@ -32,35 +33,35 @@ Azure Industrial IoT OPC UA Publisher Service
 <a name="paths"></a>
 ## Resources
 
-<a name="monitor_resource"></a>
-### Monitor
-Value and Event monitoring services
+<a name="jobs_resource"></a>
+### Jobs
+Jobs controller
 
 
-<a name="subscribe"></a>
-#### Subscribe to receive samples
+<a name="queryjobs"></a>
+#### Query jobs
 ```
-PUT /v2/monitor/{endpointId}/samples
+POST /publisher/v2/jobs
 ```
 
 
 ##### Description
-Register a client to receive publisher samples through SignalR.
+List all jobs that are registered or continues a query.
 
 
 ##### Parameters
 
 |Type|Name|Description|Schema|
 |---|---|---|---|
-|**Path**|**endpointId**  <br>*required*|The endpoint to subscribe to|string|
-|**Body**|**body**  <br>*optional*|The user id that will receive publisher samples.|string|
+|**Query**|**pageSize**  <br>*optional*|Optional number of results to return|integer (int32)|
+|**Body**|**body**  <br>*optional*|Query specification to use as filter.|[JobInfoQueryApiModel](definitions.md#jobinfoqueryapimodel)|
 
 
 ##### Responses
 
 |HTTP Code|Description|Schema|
 |---|---|---|
-|**200**|Success|No Content|
+|**200**|Success|[JobInfoListApiModel](definitions.md#jobinfolistapimodel)|
 
 
 ##### Consumes
@@ -69,32 +70,100 @@ Register a client to receive publisher samples through SignalR.
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
-##### Security
+##### Produces
 
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/plain`
+* `application/json`
+* `text/json`
+* `application/x-msgpack`
 
 
-<a name="unsubscribe"></a>
-#### Unsubscribe from receiving samples.
+<a name="listjobs"></a>
+#### Get list of jobs
 ```
-DELETE /v2/monitor/{endpointId}/samples/{userId}
+GET /publisher/v2/jobs
 ```
 
 
 ##### Description
-Unregister a client and stop it from receiving samples.
+List all jobs that are registered or continues a query.
 
 
 ##### Parameters
 
 |Type|Name|Description|Schema|
 |---|---|---|---|
-|**Path**|**endpointId**  <br>*required*|The endpoint to unsubscribe from|string|
-|**Path**|**userId**  <br>*required*|The user id that will not receive any more published samples|string|
+|**Query**|**continuationToken**  <br>*optional*|Optional Continuation token|string|
+|**Query**|**pageSize**  <br>*optional*|Optional number of results to return|integer (int32)|
+
+
+##### Responses
+
+|HTTP Code|Description|Schema|
+|---|---|---|
+|**200**|Success|[JobInfoListApiModel](definitions.md#jobinfolistapimodel)|
+
+
+##### Produces
+
+* `text/plain`
+* `application/json`
+* `text/json`
+* `application/x-msgpack`
+
+
+<a name="getjob"></a>
+#### Get job by id
+```
+GET /publisher/v2/jobs/{id}
+```
+
+
+##### Description
+Returns a job with the provided identifier.
+
+
+##### Parameters
+
+|Type|Name|Schema|
+|---|---|---|
+|**Path**|**id**  <br>*required*|string|
+
+
+##### Responses
+
+|HTTP Code|Description|Schema|
+|---|---|---|
+|**200**|Success|[JobInfoApiModel](definitions.md#jobinfoapimodel)|
+
+
+##### Produces
+
+* `text/plain`
+* `application/json`
+* `text/json`
+* `application/x-msgpack`
+
+
+<a name="deletejob"></a>
+#### Delete job by id
+```
+DELETE /publisher/v2/jobs/{id}
+```
+
+
+##### Description
+Deletes a job.
+
+
+##### Parameters
+
+|Type|Name|Schema|
+|---|---|---|
+|**Path**|**id**  <br>*required*|string|
 
 
 ##### Responses
@@ -104,11 +173,54 @@ Unregister a client and stop it from receiving samples.
 |**200**|Success|No Content|
 
 
-##### Security
+<a name="canceljob"></a>
+#### Cancel job by id
+```
+GET /publisher/v2/jobs/{id}/cancel
+```
 
-|Type|Name|Scopes|
+
+##### Description
+Cancels a job execution.
+
+
+##### Parameters
+
+|Type|Name|Schema|
 |---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+|**Path**|**id**  <br>*required*|string|
+
+
+##### Responses
+
+|HTTP Code|Description|Schema|
+|---|---|---|
+|**200**|Success|No Content|
+
+
+<a name="restartjob"></a>
+#### Restart job by id
+```
+GET /publisher/v2/jobs/{id}/restart
+```
+
+
+##### Description
+Restarts a cancelled job which sets it back to active.
+
+
+##### Parameters
+
+|Type|Name|Schema|
+|---|---|---|
+|**Path**|**id**  <br>*required*|string|
+
+
+##### Responses
+
+|HTTP Code|Description|Schema|
+|---|---|---|
+|**200**|Success|No Content|
 
 
 <a name="publish_resource"></a>
@@ -119,7 +231,7 @@ Value and Event publishing services
 <a name="getfirstlistofpublishednodes"></a>
 #### Get currently published nodes
 ```
-POST /v2/publish/{endpointId}
+POST /publisher/v2/publish/{endpointId}
 ```
 
 
@@ -148,24 +260,21 @@ Returns currently published node ids for an endpoint. The endpoint must be activ
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="getnextlistofpublishednodes"></a>
 #### Get next set of published nodes
 ```
-GET /v2/publish/{endpointId}
+GET /publisher/v2/publish/{endpointId}
 ```
 
 
@@ -190,20 +299,59 @@ Returns next set of currently published node ids for an endpoint. The endpoint m
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
+* `text/json`
+* `application/x-msgpack`
 
 
-##### Security
+<a name="bulkpublishvalues"></a>
+#### Bulk publish node values
+```
+POST /publisher/v2/publish/{endpointId}/bulk
+```
 
-|Type|Name|Scopes|
+
+##### Description
+Adds or removes in bulk values that should be published from a particular endpoint.
+
+
+##### Parameters
+
+|Type|Name|Description|Schema|
+|---|---|---|---|
+|**Path**|**endpointId**  <br>*required*|The identifier of an activated endpoint.|string|
+|**Body**|**body**  <br>*required*|The bulk publish request|[PublishBulkRequestApiModel](definitions.md#publishbulkrequestapimodel)|
+
+
+##### Responses
+
+|HTTP Code|Description|Schema|
 |---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+|**200**|Success|[PublishBulkResponseApiModel](definitions.md#publishbulkresponseapimodel)|
+
+
+##### Consumes
+
+* `application/json-patch+json`
+* `application/json`
+* `text/json`
+* `application/*+json`
+* `application/x-msgpack`
+
+
+##### Produces
+
+* `text/plain`
+* `application/json`
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="startpublishingvalues"></a>
 #### Start publishing node values
 ```
-POST /v2/publish/{endpointId}/start
+POST /publisher/v2/publish/{endpointId}/start
 ```
 
 
@@ -232,24 +380,21 @@ Start publishing variable node values to IoT Hub. The endpoint must be activated
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="stoppublishingvalues"></a>
 #### Stop publishing node values
 ```
-POST /v2/publish/{endpointId}/stop
+POST /publisher/v2/publish/{endpointId}/stop
 ```
 
 
@@ -278,18 +423,112 @@ Stop publishing variable node values to IoT Hub. The endpoint must be activated 
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
+* `text/json`
+* `application/x-msgpack`
 
 
-##### Security
+<a name="workers_resource"></a>
+### Workers
+Agent controller
 
-|Type|Name|Scopes|
+
+<a name="listworkers"></a>
+#### Get list of workers
+```
+GET /publisher/v2/workers
+```
+
+
+##### Description
+List all workers that are registered or continues a query.
+
+
+##### Parameters
+
+|Type|Name|Description|Schema|
+|---|---|---|---|
+|**Query**|**continuationToken**  <br>*optional*|Optional Continuation token|string|
+|**Query**|**pageSize**  <br>*optional*|Optional number of results to return|integer (int32)|
+
+
+##### Responses
+
+|HTTP Code|Description|Schema|
 |---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+|**200**|Success|[WorkerInfoListApiModel](definitions.md#workerinfolistapimodel)|
+
+
+##### Produces
+
+* `text/plain`
+* `application/json`
+* `text/json`
+* `application/x-msgpack`
+
+
+<a name="getworker"></a>
+#### Get worker
+```
+GET /publisher/v2/workers/{id}
+```
+
+
+##### Description
+Returns a worker with the provided identifier.
+
+
+##### Parameters
+
+|Type|Name|Schema|
+|---|---|---|
+|**Path**|**id**  <br>*required*|string|
+
+
+##### Responses
+
+|HTTP Code|Description|Schema|
+|---|---|---|
+|**200**|Success|[WorkerInfoApiModel](definitions.md#workerinfoapimodel)|
+
+
+##### Produces
+
+* `text/plain`
+* `application/json`
+* `text/json`
+* `application/x-msgpack`
+
+
+<a name="deleteworker"></a>
+#### Delete worker by id
+```
+DELETE /publisher/v2/workers/{id}
+```
+
+
+##### Description
+Deletes an worker in the registry.
+
+
+##### Parameters
+
+|Type|Name|Schema|
+|---|---|---|
+|**Path**|**id**  <br>*required*|string|
+
+
+##### Responses
+
+|HTTP Code|Description|Schema|
+|---|---|---|
+|**200**|Success|No Content|
 
 
 

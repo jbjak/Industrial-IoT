@@ -6,6 +6,8 @@
 namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
     using Microsoft.Azure.IIoT.OpcUa.Api.Twin.Models;
     using Microsoft.Azure.IIoT.Http;
+    using Microsoft.Azure.IIoT.Serializers;
+    using Microsoft.Azure.IIoT.Serializers.NewtonSoft;
     using System;
     using System.Threading.Tasks;
     using System.Linq;
@@ -21,8 +23,10 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
         /// </summary>
         /// <param name="httpClient"></param>
         /// <param name="config"></param>
-        public TwinServiceClient(IHttpClient httpClient, ITwinConfig config) :
-            this(httpClient, config.OpcUaTwinServiceUrl, config.OpcUaTwinServiceResourceId) {
+        /// <param name="serializer"></param>
+        public TwinServiceClient(IHttpClient httpClient, ITwinConfig config,
+            ISerializer serializer) :
+            this(httpClient, config?.OpcUaTwinServiceUrl, serializer) {
         }
 
         /// <summary>
@@ -30,18 +34,22 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
         /// </summary>
         /// <param name="httpClient"></param>
         /// <param name="serviceUri"></param>
-        /// <param name="resourceId"></param>
-        public TwinServiceClient(IHttpClient httpClient, string serviceUri, string resourceId) {
-            _serviceUri = serviceUri ?? throw new ArgumentNullException(nameof(serviceUri),
+        /// <param name="serializer"></param>
+        public TwinServiceClient(IHttpClient httpClient, string serviceUri,
+            ISerializer serializer = null) {
+            if (string.IsNullOrWhiteSpace(serviceUri)) {
+                throw new ArgumentNullException(nameof(serviceUri),
                     "Please configure the Url of the endpoint micro service.");
+            }
+            _serviceUri = serviceUri.TrimEnd('/');
+            _serializer = serializer ?? new NewtonSoftJsonSerializer();
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _resourceId = resourceId;
         }
 
         /// <inheritdoc/>
         public async Task<string> GetServiceStatusAsync(CancellationToken ct) {
             var request = _httpClient.NewRequest($"{_serviceUri}/healthz",
-                _resourceId);
+                Resource.Platform);
             try {
                 var response = await _httpClient.GetAsync(request, ct).ConfigureAwait(false);
                 response.Validate();
@@ -59,11 +67,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
                 throw new ArgumentNullException(nameof(endpointId));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/browse/{endpointId}",
-                _resourceId);
-            request.SetContent(content);
+                Resource.Platform);
+            _serializer.SerializeToRequest(request, content);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<BrowseResponseApiModel>();
+            return _serializer.DeserializeResponse<BrowseResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -79,11 +87,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
                 throw new ArgumentNullException(nameof(content.ContinuationToken));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/browse/{endpointId}/next",
-                _resourceId);
-            request.SetContent(content);
+                Resource.Platform);
+            _serializer.SerializeToRequest(request, content);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<BrowseNextResponseApiModel>();
+            return _serializer.DeserializeResponse<BrowseNextResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -100,11 +108,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
                 throw new ArgumentNullException(nameof(content.BrowsePaths));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/browse/{endpointId}/path",
-                _resourceId);
-            request.SetContent(content);
+                Resource.Platform);
+            _serializer.SerializeToRequest(request, content);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<BrowsePathResponseApiModel>();
+            return _serializer.DeserializeResponse<BrowsePathResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -120,11 +128,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
                 throw new ArgumentException(nameof(content.Attributes));
             }
             var request = _httpClient.NewRequest(
-                $"{_serviceUri}/v2/read/{endpointId}/attributes", _resourceId);
-            request.SetContent(content);
+                $"{_serviceUri}/v2/read/{endpointId}/attributes", Resource.Platform);
+            _serializer.SerializeToRequest(request, content);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<ReadResponseApiModel>();
+            return _serializer.DeserializeResponse<ReadResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -140,11 +148,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
                 throw new ArgumentException(nameof(content.Attributes));
             }
             var request = _httpClient.NewRequest(
-                $"{_serviceUri}/v2/write/{endpointId}/attributes", _resourceId);
-            request.SetContent(content);
+                $"{_serviceUri}/v2/write/{endpointId}/attributes", Resource.Platform);
+            _serializer.SerializeToRequest(request, content);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<WriteResponseApiModel>();
+            return _serializer.DeserializeResponse<WriteResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -157,11 +165,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
                 throw new ArgumentNullException(nameof(content));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/read/{endpointId}",
-                _resourceId);
-            request.SetContent(content);
+                Resource.Platform);
+            _serializer.SerializeToRequest(request, content);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<ValueReadResponseApiModel>();
+            return _serializer.DeserializeResponse<ValueReadResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -173,15 +181,15 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
             if (content == null) {
                 throw new ArgumentNullException(nameof(content));
             }
-            if (content.Value == null) {
+            if (content.Value is null) {
                 throw new ArgumentNullException(nameof(content.Value));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/write/{endpointId}",
-                _resourceId);
-            request.SetContent(content);
+                Resource.Platform);
+            _serializer.SerializeToRequest(request, content);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<ValueWriteResponseApiModel>();
+            return _serializer.DeserializeResponse<ValueWriteResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -194,11 +202,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
                 throw new ArgumentNullException(nameof(content));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/call/{endpointId}/metadata",
-                _resourceId);
-            request.SetContent(content);
+                Resource.Platform);
+            _serializer.SerializeToRequest(request, content);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<MethodMetadataResponseApiModel>();
+            return _serializer.DeserializeResponse<MethodMetadataResponseApiModel>(response);
         }
 
         /// <inheritdoc/>
@@ -211,15 +219,15 @@ namespace Microsoft.Azure.IIoT.OpcUa.Api.Twin.Clients {
                 throw new ArgumentNullException(nameof(content));
             }
             var request = _httpClient.NewRequest($"{_serviceUri}/v2/call/{endpointId}",
-                _resourceId);
-            request.SetContent(content);
+                Resource.Platform);
+            _serializer.SerializeToRequest(request, content);
             var response = await _httpClient.PostAsync(request, ct).ConfigureAwait(false);
             response.Validate();
-            return response.GetContent<MethodCallResponseApiModel>();
+            return _serializer.DeserializeResponse<MethodCallResponseApiModel>(response);
         }
 
         private readonly IHttpClient _httpClient;
+        private readonly ISerializer _serializer;
         private readonly string _serviceUri;
-        private readonly string _resourceId;
     }
 }

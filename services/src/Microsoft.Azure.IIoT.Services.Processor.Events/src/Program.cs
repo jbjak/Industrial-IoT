@@ -5,19 +5,22 @@
 
 namespace Microsoft.Azure.IIoT.Services.Processor.Events {
     using Microsoft.Azure.IIoT.Services.Processor.Events.Runtime;
-    using Microsoft.Azure.IIoT.Messaging.SignalR.Services;
-    using Microsoft.Azure.IIoT.OpcUa.Api.Onboarding;
-    using Microsoft.Azure.IIoT.OpcUa.Api.Onboarding.Clients;
-    using Microsoft.Azure.IIoT.OpcUa.Api.Registry.Clients;
+    using Microsoft.Azure.IIoT.OpcUa.Registry;
     using Microsoft.Azure.IIoT.OpcUa.Registry.Handlers;
+    using Microsoft.Azure.IIoT.OpcUa.Registry.Events.v2;
     using Microsoft.Azure.IIoT.Exceptions;
+    using Microsoft.Azure.IIoT.Messaging.Default;
+    using Microsoft.Azure.IIoT.Messaging.ServiceBus.Clients;
+    using Microsoft.Azure.IIoT.Messaging.ServiceBus.Services;
     using Microsoft.Azure.IIoT.Hub.Processor.EventHub;
     using Microsoft.Azure.IIoT.Hub.Processor.Services;
     using Microsoft.Azure.IIoT.Hub.Services;
+    using Microsoft.Azure.IIoT.Hub.Client;
     using Microsoft.Azure.IIoT.Http.Default;
+    using Microsoft.Azure.IIoT.Http.Ssl;
+    using Microsoft.Azure.IIoT.Auth.Clients;
+    using Microsoft.Azure.IIoT.Serializers;
     using Microsoft.Azure.IIoT.Utils;
-    using Microsoft.Azure.IIoT.Http.Auth;
-    using Microsoft.Azure.IIoT.Auth.Clients.Default;
     using Microsoft.Extensions.Configuration;
     using Autofac;
     using Serilog;
@@ -27,9 +30,8 @@ namespace Microsoft.Azure.IIoT.Services.Processor.Events {
     using System.Threading.Tasks;
 
     /// <summary>
-    /// IoT Hub device telemetry event processor host.  Processes all
-    /// telemetry from devices - forwards unknown telemetry on to
-    /// time series event hub.
+    /// IoT Hub device events event processor host.  Processes all
+    /// events from devices including onboarding and discovery events.
     /// </summary>
     public class Program {
 
@@ -43,11 +45,13 @@ namespace Microsoft.Azure.IIoT.Services.Processor.Events {
             var config = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json", true)
+                .AddFromDotEnvFile()
                 .AddEnvironmentVariables()
                 .AddEnvironmentVariables(EnvironmentVariableTarget.User)
-                .AddFromDotEnvFile()
-                .AddFromKeyVault()
                 .AddCommandLine(args)
+                // Above configuration providers will provide connection
+                // details for KeyVault configuration provider.
+                .AddFromKeyVault(providerPriority: ConfigurationProviderPriority.Lowest)
                 .Build();
 
             // Set up dependency injection for the event processor host
@@ -95,59 +99,63 @@ namespace Microsoft.Azure.IIoT.Services.Processor.Events {
             var builder = new ContainerBuilder();
 
             builder.RegisterInstance(serviceInfo)
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
 
             // Register configuration interfaces
             builder.RegisterInstance(config)
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             builder.RegisterInstance(config.Configuration)
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
 
-            // register diagnostics
+            // Add diagnostics
             builder.AddDiagnostics(config);
+
+            // Register http client module
+            builder.RegisterModule<HttpClientModule>();
+#if DEBUG
+            builder.RegisterType<NoOpCertValidator>()
+                .AsImplementedInterfaces();
+#endif
+            // Add serializers
+            builder.RegisterModule<NewtonSoftJsonModule>();
+
+            // Add unattended authentication
+            builder.RegisterModule<UnattendedAuthentication>();
 
             // Event processor services for onboarding consumer
             builder.RegisterType<EventProcessorHost>()
                 .AsImplementedInterfaces().SingleInstance();
             builder.RegisterType<EventProcessorFactory>()
+                .AsImplementedInterfaces();
+
+            // Handle iot hub telemetry events...
+            builder.RegisterType<IoTHubServiceHttpClient>()
+                .AsImplementedInterfaces();
+            builder.RegisterType<IoTHubDeviceEventHandler>()
+                .AsImplementedInterfaces();
+            // ... and pass to the following handlers:
+
+            // 1.) Handler for discovery progress
+            builder.RegisterType<DiscoveryProgressHandler>()
+                .AsImplementedInterfaces();
+            builder.RegisterType<DiscoveryProgressEventBusPublisher>()
+                .AsImplementedInterfaces();
+
+            // 2.) Handlers for twin and device change events ...
+            builder.RegisterModule<RegistryTwinEventHandlers>();
+
+            // ... publish received events to registered event bus
+            builder.RegisterType<EventBusHost>()
                 .AsImplementedInterfaces().SingleInstance();
+            builder.RegisterType<ServiceBusClientFactory>()
+                .AsImplementedInterfaces();
+            builder.RegisterType<ServiceBusEventBus>()
+                .AsImplementedInterfaces().SingleInstance();
+
             // ... and auto start
             builder.RegisterType<HostAutoStart>()
                 .AutoActivate()
                 .AsImplementedInterfaces().SingleInstance();
-
-            // Handle telemetry events
-            builder.RegisterType<IoTHubDeviceEventHandler>()
-                .AsImplementedInterfaces().SingleInstance();
-
-            // Handle discovery events
-            builder.RegisterType<DiscoveryEventHandler>()
-                .AsImplementedInterfaces().SingleInstance();
-            // ... requires the corresponding services
-
-            // Register http client module (needed for api)
-            builder.RegisterModule<HttpClientModule>();
-            // Use device code token provider to get tokens
-            builder.RegisterType<AppAuthenticationProvider>()
-                .AsImplementedInterfaces().SingleInstance();
-            builder.RegisterType<OnboardingAdapter>()
-                .AsImplementedInterfaces().SingleInstance();
-            builder.RegisterType<OnboardingServiceClient>()
-                .AsImplementedInterfaces().SingleInstance();
-
-            // Handle discovery messages
-            builder.RegisterType<DiscoveryMessageHandler>()
-                .AsImplementedInterfaces().SingleInstance();
-
-            // ... forward progress directly to clients
-            builder.RegisterType<DiscoveryProgressPublisher>()
-                .AsImplementedInterfaces().SingleInstance();
-            builder.RegisterType<SignalRServiceHost>()
-                .AsImplementedInterfaces().SingleInstance();
-
-            // Handle twin events
-            // ...
-
             return builder;
         }
     }

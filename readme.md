@@ -1,34 +1,61 @@
-# Azure Industrial IoT
+# Azure Industrial IoT Cloud Platform
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Build Status](https://msazure.visualstudio.com/One/_apis/build/status/Custom/Azure_IOT/Industrial/Components/Azure.Industrial-IoT?branchName=master)](https://msazure.visualstudio.com/One/_build/latest?definitionId=86580&branchName=master)
 
-## Features
+## Welcome!
 
-### Discover, register and manage your Industrial Assets with Azure
+The Azure Industrial IoT Cloud Platform is a Microsoft product that has fully embraced openness. We use Azure's managed Platform as a Service (PaaS) services, open-source software leveraging the MIT license throughout, open international standards for communication (OPC UA, MQTT) and interfaces (Open API) and open industrial data models (OPC UA) on the edge and in the cloud.
 
-Azure Industrial IoT allows plant operators to discover [OPC UA](docs/opcua.md) enabled assets in a factory network and register them in Azure IoT Hub.  
+## Discover, register and manage your industrial assets with Azure
 
-### Analyze, react to events, and control factory equipment from anywhere
+The Azure Industrial IoT Cloud Platform allows you to discover industrial assets on-site and automatically registers them in the cloud for easy access there. It leverages managed Azure PaaS services so you don't have to manage the platform yourself. On top of the Azure PaaS services, we have built a number of edge and cloud services that must be used together, leveraging OPC UA as the data model. This is also the first cloud platform to leverage the OPC UA PubSub telemetry format (both JSON and binary, on top of MQTT). If your assets don't support OPC UA as an interface, we have worked with our large partner network to support all types of industrial interfaces through the use of adapters, fully integrated with our platform. Please check out the [Azure IoT Edge Marketplace](https://azuremarketplace.microsoft.com/en-us/marketplace/apps/category/internet-of-things?page=1&subcategories=iot-edge-modules) for a list of adapters available.
 
-Operations personnel can subscribe to and react to events on the factory floor from anywhere in the world.  The Microservices' REST APIs provide most of the defined OPC UA services and are secured using OAUTH authentication and authorization backed by Azure Active Directory (AAD).  This enables your cloud applications to browse server address spaces or read/write variables and execute methods using HTTPS as well as process OPC UA Pub/Sub messages.  
+An overview architecture is depicted below:
 
-### Simple developer experience
+![diagram](/docs/media/IIoT-Diagram.png)
 
-The [REST API](docs/api/readme.md) can be used with any programming language through its exposed Open API specification (Swagger). This means when integrating OPC UA into cloud management solutions, you are free to choose technology that matches your skills, interests, and architecture choices.
+The edge services are implemented as Azure IoT Edge modules and run on on-premises [Kubernetes](https://docs.microsoft.com/en-us/azure/iot-edge/how-to-install-iot-edge-kubernetes) (currently in preview), or stand-alone on an on-premises gateway that supports Docker. The  cloud services are implemented as ASP.NET micro-services with a REST interface and run on managed Azure Kubernetes Services (currently in preview) or stand-alone on Azure App Service. For both edge and cloud services, we have provided pre-built Docker containers in the Microsoft Container Registry (MCR), so you don't have to build them yourself. The edge and cloud services are leveraging each other and must be used together. We have also provided easy-to-use deployment scripts that allow you to deploy the entire platform in a step-by-step fashion.
+
+We have also built a configuration application running on Azure that lets you access the services through a simple UI.
 
 ## Getting started
 
-- [Read the devloper documentation](https://azure.github.io/Industrial-IoT/)
-- [Deploy the Platform, Application and Edge Gateways](docs/deploy/readme.md)
-- Explore Industrial IoT projects using this platform
-  - [Connected Factory](https://github.com/Azure/Azure-IoT-Connected-Factory) Solution Accelerator which you can try out [here](https://www.azureiotsolutions.com/Accelerators).
-  - [OPC Vault Dashboard](https://github.com/Azure/azure-iiot-opc-vault-service/tree/master/app)
+- [Read the documentation](https://azure.github.io/Industrial-IoT/).
+- Releases of the platform can be found [here](https://github.com/Azure/Industrial-IoT/releases).
+- [Deploy the pre-built services, the configuration application and edge gateways](docs/deploy/readme.md).
+- Explore other Azure Industrial IoT products using this platform.
+  - [Connected Factory](https://github.com/Azure/Azure-IoT-Connected-Factory) Solution Accelerator which can be deployed from [here](https://www.azureiotsolutions.com/Accelerators).
+  - Also check out our [OPC Vault Application](https://github.com/Azure/azure-iiot-opc-vault-service/tree/master/app).
+
+## What you get when you deploy the platform
+
+The minimal deployment script deploys the following managed Azure services into your Azure subscription:
+
+- 1 [IoT Hub](https://azure.microsoft.com/en-us/services/iot-hub/) with 4 partitions, S1 SKU (to communicate with the edge and ingress raw OPC UA telemetry data)
+- 1 [Key Vault](https://azure.microsoft.com/en-us/services/key-vault/), Premium SKU (to manage secrets and certificates)
+- 1 [Service Bus](https://azure.microsoft.com/en-us/services/service-bus/), Standard SKU (as integration event bus)
+- 1 [Event Hubs](https://azure.microsoft.com/en-us/services/event-hubs/) with 4 partitions and 2 day retention, Standard SKU (contains processed and contextualized OPC UA telemetry data)
+- 1 [Cosmos DB](https://azure.microsoft.com/en-us/services/cosmos-db/) with Session consistency level (to persist state that is not persisted in IoT Hub)
+- 1 [Blob Storage](https://azure.microsoft.com/en-us/services/storage/) V2, Standard LRS SKU (for event hub checkpointing)
+
+[Azure Kubernetes Services](https://azure.microsoft.com/en-us/services/kubernetes-service/) should be used to host the cloud micro-services (this is currently in preview, please see our documentation).
+
+Alternatively, the full deployment script deploys the following additional managed Azure services into your Azure subscription and deploys the cloud micro-services into an App Service instance:
+
+- 1 [Data Lake Storage](https://azure.microsoft.com/en-us/services/storage/data-lake-storage/) V2, Standard LRS SKU (used to connect Power BI to the platform, see tutorial)
+- 1 [Time Series Insights](https://azure.microsoft.com/en-us/services/time-series-insights), Pay As You Go SKU, 1 Scale Unit
+- 1 [Blob Storage](https://azure.microsoft.com/en-us/services/storage/) V2, Standard LRS SKU (used for long-term storage for Time Series Insights)
+- 1 [App Service](https://azure.microsoft.com/en-us/services/app-service/), B1 SKU (for hosting the Industrial IoT Engineering Tool cloud application and for hosting the cloud micro-services [all-in-one](https://github.com/Azure/Industrial-IoT/blob/master/docs/services/all-in-one.md))
+- 1 [SignalR](https://azure.microsoft.com/en-us/services/signalr-service/), Standard SKU (used to scale out asynchronous API notifications)
+- 3 [Virtual Machines](https://azure.microsoft.com/en-us/services/virtual-machines/), B2 SKU (1 Linux IoT Edge gateway, 1 Windows IoT Edge gateway, 1 OPC UA server. (used for a factory simulation to show the capabilities of the platform and to generate sample telemetry)
+- 1 [Device Provisioning Service](https://docs.microsoft.com/en-us/azure/iot-dps/), S1 SKU (used for deploying and provisioning the simulation gateways)
+- 1 [Application Insights](https://azure.microsoft.com/en-us/services/monitor/) and 1 Log Analytics Workspace for Operations Monitoring
 
 ## Give feedback and report bugs
 
-Please report any security related issues by following our [Security](security.md) process.
+Please report any security related issues by following our [security](security.md) process.
 
-Please enter all other bugs, feature requests, documentation issues, or suggestions as GitHub Issues [here](https://github.com/Azure/Industrial-IoT/issues).
+Please enter all other bugs, feature requests, documentation issues, or suggestions as GitHub issues [here](https://github.com/Azure/Industrial-IoT/issues).
 
 ## Contribute
 

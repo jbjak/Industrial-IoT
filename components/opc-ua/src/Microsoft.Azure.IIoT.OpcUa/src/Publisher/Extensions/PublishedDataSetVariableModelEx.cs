@@ -21,6 +21,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Publisher.Models {
                 return null;
             }
             return new PublishedDataSetVariableModel {
+                Id = model.Id,
                 DiscardNew = model.DiscardNew,
                 Attribute = model.Attribute,
                 DataChangeFilter = model.DataChangeFilter,
@@ -31,8 +32,12 @@ namespace Microsoft.Azure.IIoT.OpcUa.Publisher.Models {
                 PublishedVariableNodeId = model.PublishedVariableNodeId,
                 PublishedVariableDisplayName = model.PublishedVariableDisplayName,
                 SamplingInterval = model.SamplingInterval,
-                SubstituteValue = model.SubstituteValue?.DeepClone(),
-                QueueSize = model.QueueSize
+                SubstituteValue = model.SubstituteValue?.Copy(),
+                QueueSize = model.QueueSize,
+                HeartbeatInterval = model.HeartbeatInterval,
+                BrowsePath = model.BrowsePath,
+                MonitoringMode = model.MonitoringMode,
+                TriggerId = model.TriggerId
             };
         }
     }

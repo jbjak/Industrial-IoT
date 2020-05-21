@@ -4,9 +4,11 @@
 // ------------------------------------------------------------
 
 namespace Microsoft.Azure.IIoT.AspNetCore.OpenApi {
+    using Microsoft.Azure.IIoT.Serializers;
     using Microsoft.OpenApi.Any;
     using Microsoft.OpenApi.Models;
     using Newtonsoft.Json;
+    using Newtonsoft.Json.Converters;
     using Swashbuckle.AspNetCore.SwaggerGen;
     using System;
     using System.Collections.Generic;
@@ -89,6 +91,12 @@ namespace Microsoft.Azure.IIoT.AspNetCore.OpenApi {
                     }
                     paramType = paramType.GetGenericArguments()[0];
                 }
+                if (paramType == typeof(VariantValue)) {
+                    model.Type = null; // any
+                    model.Format = null;
+                    model.Nullable = true;
+                    model.Description = "A variant which can be represented by any value including null.";
+                }
                 if (paramType == typeof(uint)) {
                     model.Type = "integer";
                     model.Format = "int64";
@@ -97,7 +105,8 @@ namespace Microsoft.Azure.IIoT.AspNetCore.OpenApi {
                     model.Type = "string";
                     model.Enum = Enum.GetValues(paramType)
                         .Cast<object>()
-                        .Select(v => JsonConvert.SerializeObject(v))
+                        .Select(v => JsonConvert.SerializeObject(v, new StringEnumConverter())
+                            .TrimQuotes())
                         .Select(n => (IOpenApiAny)new OpenApiString(n))
                         .ToList();
                     model.Extensions.AddOrUpdate("x-ms-enum", new OpenApiObject {

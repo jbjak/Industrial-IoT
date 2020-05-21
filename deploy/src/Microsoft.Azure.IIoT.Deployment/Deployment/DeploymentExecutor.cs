@@ -12,6 +12,8 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
     using System.Security.Cryptography.X509Certificates;
     using System.Threading;
     using System.Threading.Tasks;
+    using System.IO;
+    using System.Text;
 
     using Newtonsoft.Json;
     using Newtonsoft.Json.Converters;
@@ -21,14 +23,17 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
     using Configuration;
 
     using Microsoft.Azure.KeyVault.Models;
+    using Microsoft.Azure.Management.ContainerService.Fluent.Models;
     using Microsoft.Azure.Management.ResourceManager.Fluent;
     using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
+    using Microsoft.Azure.Management.ResourceManager.Fluent.Models;
     using Microsoft.Azure.Management.KeyVault.Fluent.Models;
     using Microsoft.Azure.Management.Storage.Fluent.Models;
     using Microsoft.Azure.Management.IotHub.Models;
     using Microsoft.Azure.Management.EventHub.Fluent.Models;
     using Microsoft.Azure.Management.Network.Fluent.Models;
     using Microsoft.Graph;
+    using global::Azure.Storage.Blobs;
 
     class DeploymentExecutor : IDisposable {
 
@@ -52,6 +57,7 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
         private RestClient _restClient;
 
         private ApplicationsManager _applicationsManager;
+        private ResourceMgmtClient _resourceManagementClient;
         private KeyVaultMgmtClient _keyVaultManagementClient;
         private StorageMgmtClient _storageManagementClient;
         private IotHubMgmtClient _iotHubManagementClient;
@@ -65,11 +71,12 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
         private AuthorizationMgmtClient _authorizationManagementClient;
         private AksMgmtClient _aksManagementClient;
         private SignalRMgmtClient _signalRManagementClient;
+        private ComputeMgmtClient _computeManagementClient;
 
         // Resource names
         private string _keyVaultName;
-        private string _storageAccountGen1Name;
         private string _storageAccountGen2Name;
+        private string _storageAccountGen2HNSName;
         private string _iotHubName;
         private string _cosmosDBAccountName;
         private string _serviceBusNamespaceName;
@@ -77,14 +84,8 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
         private string _eventHubName;
         private string _operationalInsightsWorkspaceName;
         private string _applicationInsightsName;
-        private string _appServicePlanName;
-        private string _azureWebsiteName;
         private string _networkSecurityGroupName;
-        //private string _routTableName;
         private string _virtualNetworkName;
-        //private string _networkInterfaceName;
-        //private string _publicIPAddressName;
-        //private string _domainNameLabel;
         private string _aksClusterName;
         private string _signalRName;
 
@@ -92,13 +93,8 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
         private DirectoryObject _owner;
         private bool _ownedApplications = false;
 
-        private const string kWEB_APP_CN = "webapp.services.net"; // ToDo: Assign meaningfull value.
-        private X509Certificate2 _webAppX509Certificate;
-
         private const string kAKS_CLUSTER_CN = "aks.cluster.net"; // ToDo: Assign meaningfull value.
         private X509Certificate2 _aksClusterX509Certificate;
-
-        private KeyBundle _dataprotectionKey;
 
         public DeploymentExecutor(
             IConfigurationProvider configurationProvider
@@ -173,7 +169,7 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
 
                 await SetupApplicationsAsync(cancellationToken);
                 await UpdateClientApplicationRedirectUrisAsync(cancellationToken);
-                OutputApplicationRegistrationDefinition();
+                OutputApplicationRegistrationDefinitionSettings();
 
                 Log.Information("Done.");
             }
@@ -288,7 +284,7 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
 
                 _owner = me;
 
-                if (null != me.Mail) {
+                if (!string.IsNullOrWhiteSpace(me.Mail)) {
                     InitializeDefaultTags(me.Mail);
                 }
                 else {
@@ -343,8 +339,10 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
         ) {
             // Select existing ResourceGroup or create a new one.
             if (_configurationProvider.IfUseExistingResourceGroup()) {
-                var resourceGroups = _azureResourceManager.GetResourceGroups();
-                _resourceGroup = _configurationProvider.GetExistingResourceGroup(resourceGroups);
+                var resourceGroups = await _azureResourceManager
+                    .GetResourceGroupsAsync(cancellationToken);
+                _resourceGroup = _configurationProvider
+                    .GetExistingResourceGroup(resourceGroups);
             }
             else {
                 bool ifResourceGroupExists(string _resourceGroupName) {
@@ -409,6 +407,7 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
 
             var subscriptionId = _subscription.SubscriptionId;
 
+            _resourceManagementClient = new ResourceMgmtClient(_subscription.SubscriptionId, _restClient);
             _keyVaultManagementClient = new KeyVaultMgmtClient(subscriptionId, _restClient);
             _storageManagementClient = new StorageMgmtClient(subscriptionId, _restClient);
             _iotHubManagementClient = new IotHubMgmtClient(subscriptionId, _restClient);
@@ -422,13 +421,13 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
             _authorizationManagementClient = new AuthorizationMgmtClient(subscriptionId, _restClient);
             _aksManagementClient = new AksMgmtClient(subscriptionId, _restClient);
             _signalRManagementClient = new SignalRMgmtClient(subscriptionId, _restClient);
+            _computeManagementClient = new ComputeMgmtClient(subscriptionId, _restClient);
         }
 
         protected async Task RegisterResourceProvidersAsync(
             CancellationToken cancellationToken = default
         ) {
-            using var resourceMgmtClient = new ResourceMgmtClient(_subscription.SubscriptionId, _restClient);
-            await resourceMgmtClient.RegisterRequiredResourceProvidersAsync(cancellationToken);
+            await _resourceManagementClient.RegisterRequiredResourceProvidersAsync(cancellationToken);
         }
 
         protected async Task SetupApplicationsAsync(
@@ -541,20 +540,19 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
             await _applicationsManager.DeleteApplicationsAsync(cancellationToken);
         }
 
-        protected void OutputApplicationRegistrationDefinition() {
-            var appRegDef = new ApplicationRegistrationDefinitionSettings(
-                new ApplicationSettings(_applicationsManager.GetServiceApplication()),
-                new ServicePrincipalSettings(_applicationsManager.GetServiceApplicationSP()),
-                new ApplicationSettings(_applicationsManager.GetClientApplication()),
-                new ServicePrincipalSettings(_applicationsManager.GetClientApplicationSP()),
-                new ApplicationSettings(_applicationsManager.GetAKSApplication()),
-                new ServicePrincipalSettings(_applicationsManager.GetAKSApplicationSP()),
-                _applicationsManager.GetAKSApplicationRbacSecret()
-            );
+        /// <summary>
+        /// Output application registration definitions as
+        /// ApplicationRegistrationDefinitionSettings to console.
+        /// </summary>
+        protected void OutputApplicationRegistrationDefinitionSettings() {
+            var appRegDef = _applicationsManager
+                .ToApplicationRegistrationDefinition();
+            var appRegDefSettings = ApplicationRegistrationDefinitionSettings
+                .FromApplicationRegistrationDefinition(appRegDef);
 
             var jsonString = JsonConvert
                 .SerializeObject(
-                    appRegDef,
+                    appRegDefSettings,
                     Formatting.Indented,
                     new JsonConverter[] { new StringEnumConverter() }
                 );
@@ -562,6 +560,32 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
             Log.Information("Use details bellow as ApplicationRegistration " +
                 "for resource deployment of Industrial IoT solution.");
             Console.WriteLine(jsonString);
+        }
+
+        /// <summary>
+        /// Output jumpbox credentials to console.
+        /// </summary>
+        /// <param name="username"></param>
+        /// <param name="password"></param>
+        protected void OutputJumpboxCredentials(
+            string username,
+            string password
+        ) {
+            // We will only check for null
+            if (username is null) {
+                throw new ArgumentNullException(nameof(username));
+            }
+            if (password is null) {
+                throw new ArgumentNullException(nameof(password));
+            }
+
+            Console.WriteLine(
+                $"Use the following credentials to login to jumpbox:\n" +
+                $"\n" +
+                $"Username: {username}\n" +
+                $"Password: {password}\n" +
+                $"\n"
+            );
         }
 
         protected async Task GenerateAzureResourceNamesAsync(
@@ -585,22 +609,22 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
 
             // Storage Account names
             try {
-                _storageAccountGen1Name = await _storageManagementClient
-                    .GenerateAvailableNameAsync(cancellationToken);
-            }
-            catch (Microsoft.Rest.Azure.CloudException) {
-                Log.Warning(notAvailableApiFormat, "Storage Account");
-                _storageAccountGen1Name = StorageMgmtClient.GenerateStorageAccountName();
-            }
-
-            // Storage Account Gen2 name
-            try {
                 _storageAccountGen2Name = await _storageManagementClient
                     .GenerateAvailableNameAsync(cancellationToken);
             }
             catch (Microsoft.Rest.Azure.CloudException) {
                 Log.Warning(notAvailableApiFormat, "Storage Account");
                 _storageAccountGen2Name = StorageMgmtClient.GenerateStorageAccountName();
+            }
+
+            // Storage Account Gen2 name
+            try {
+                _storageAccountGen2HNSName = await _storageManagementClient
+                    .GenerateAvailableNameAsync(cancellationToken);
+            }
+            catch (Microsoft.Rest.Azure.CloudException) {
+                Log.Warning(notAvailableApiFormat, "Storage Account");
+                _storageAccountGen2HNSName = StorageMgmtClient.GenerateStorageAccountName();
             }
 
             // IoT hub names
@@ -651,17 +675,9 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
             // Application Insights name.
             _applicationInsightsName = ApplicationInsightsMgmtClient.GenerateName();
 
-            // AppService Plan name
-            _appServicePlanName = WebSiteMgmtClient.GenerateAppServicePlanName(_applicationName);
-            _azureWebsiteName = _applicationName;
-
             // Networking names
             _networkSecurityGroupName = NetworkMgmtClient.GenerateNetworkSecurityGroupName();
-            //_routTableName = NetworkMgmtClient.GenerateRoutTableName();
             _virtualNetworkName = NetworkMgmtClient.GenerateVirtualNetworkName();
-            //_networkInterfaceName = NetworkMgmtClient.GenerateNetworkInterfaceName();
-            //_publicIPAddressName = NetworkMgmtClient.GeneratePublicIPAddressName();
-            //_domainNameLabel = SdkContext.RandomResourceName(_applicationName + "-", 5);
 
             // AKS cluster name
             _aksClusterName = AksMgmtClient.GenerateName();
@@ -685,72 +701,66 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
             //RouteTableInner routeTable;
             VirtualNetworkInner virtualNetwork;
             SubnetInner virtualNetworkAksSubnet;
+            SubnetInner virtualNetworkVmSubnet;
             //PublicIPAddressInner publicIPAddress;
             //NetworkInterfaceInner networkInterface;
 
+            var networkingDeploymentParameters = new Dictionary<string, object> {
+                {"nsgName", _networkSecurityGroupName},
+                {"vnetName", _virtualNetworkName},
+                {"subnetAKSName", NetworkMgmtClient.VIRTUAL_NETWORK_AKS_SUBNET_NAME},
+                {"subnetVMName", NetworkMgmtClient.VIRTUAL_NETWORK_VM_SUBNET_NAME}
+            };
+
+            var networkingDeployment = await _resourceManagementClient
+                .CreateResourceGroupDeploymentAsync(
+                    _resourceGroup,
+                    "networking",
+                    Resources.ArmTemplates.networking,
+                    networkingDeploymentParameters,
+                    DeploymentMode.Incremental,
+                    _defaultTagsDict,
+                    cancellationToken
+                );
+
+            var networkingDeploymentOutput = ResourceMgmtClient
+                .ExtractDeploymentOutput(networkingDeployment);
+
             networkSecurityGroup = await _networkManagementClient
-                .CreateNetworkSecurityGroupAsync(
+                .GetNetworkSecurityGroupAsync(
                     _resourceGroup,
                     _networkSecurityGroupName,
-                    _defaultTagsDict,
                     cancellationToken
                 );
-
-            //routeTable = _networkManagementClient
-            //    .CreateRouteTableAsync(
-            //        _resourceGroup,
-            //        _routTableName,
-            //        networkInterfacePrivateIPAddress,
-            //        _defaultTagsDict,
-            //        cancellationToken    
-            //    ).Result;
 
             virtualNetwork = await _networkManagementClient
-                .CreateVirtualNetworkAsync(
+                .GetVirtualNetworkAsync(
                     _resourceGroup,
-                    networkSecurityGroup,
                     _virtualNetworkName,
-                    null,
-                    _defaultTagsDict,
                     cancellationToken
                 );
 
-            virtualNetworkAksSubnet = _networkManagementClient.GetAksSubnet(virtualNetwork);
+            virtualNetworkAksSubnet = virtualNetwork
+                .Subnets
+                .Where(subnet => subnet.Name == NetworkMgmtClient.VIRTUAL_NETWORK_AKS_SUBNET_NAME)
+                .First();
 
-            //publicIPAddress = _networkManagementClient
-            //    .CreatePublicIPAddressAsync(
-            //        _resourceGroup,
-            //        _publicIPAddressName,
-            //        _domainNameLabel,
-            //        _defaultTagsDict,
-            //        cancellationToken
-            //    )
-            //    .Result;
-
-            //networkInterface = _networkManagementClient
-            //    .CreateNetworkInterfaceAsync(
-            //        _resourceGroup,
-            //        networkSecurityGroup,
-            //        virtualNetworkAksSubnet,
-            //        _networkInterfaceName,
-            //        networkInterfacePrivateIPAddress,
-            //        _defaultTagsDict,
-            //        cancellationToken
-            //    )
-            //    .Result;
+            virtualNetworkVmSubnet = virtualNetwork
+                .Subnets
+                .Where(subnet => subnet.Name == NetworkMgmtClient.VIRTUAL_NETWORK_VM_SUBNET_NAME)
+                .First();
 
             // Create Azure KeyVault
-            VaultInner keyVault;
-
             var keyVaultParameters = _keyVaultManagementClient
                 .GetCreationParameters(
                     _authConf.TenantId,
                     _resourceGroup,
                     _applicationsManager.GetServiceApplicationSP(),
-                    _owner
+                    _owner,
+                    _defaultTagsDict
                 );
 
-            keyVault = await _keyVaultManagementClient
+            var keyVault = await _keyVaultManagementClient
                 .CreateAsync(
                     _resourceGroup,
                     _keyVaultName,
@@ -758,49 +768,8 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                     cancellationToken
                 );
 
-            // Add certificates to KeyVault
-            var keyVaultAuthenticationCallback = new IIoTKeyVaultClient.AuthenticationCallback(
-                async (authority, resource, scope) => {
-                    // Fetch AccessToken from cache.
-                    var authenticationResult = await _authenticationManager
-                        .AcquireKeyVaultAuthenticationResultAsync(cancellationToken);
-
-                    return authenticationResult.AccessToken;
-                }
-            );
-
-            using (var iiotKeyVaultClient = new IIoTKeyVaultClient(keyVaultAuthenticationCallback, keyVault)) {
-                await iiotKeyVaultClient.CreateCertificateAsync(
-                    IIoTKeyVaultClient.WEB_APP_CERT_NAME,
-                    kWEB_APP_CN,
-                    _defaultTagsDict,
-                    cancellationToken
-                );
-
-                _webAppX509Certificate = await iiotKeyVaultClient.GetSecretAsync(
-                    IIoTKeyVaultClient.WEB_APP_CERT_NAME,
-                    cancellationToken
-                );
-
-                await iiotKeyVaultClient.CreateCertificateAsync(
-                    IIoTKeyVaultClient.AKS_CLUSTER_CERT_NAME,
-                    kAKS_CLUSTER_CN,
-                    _defaultTagsDict,
-                    cancellationToken
-                );
-
-                _aksClusterX509Certificate = await iiotKeyVaultClient.GetCertificateAsync(
-                    IIoTKeyVaultClient.AKS_CLUSTER_CERT_NAME,
-                    cancellationToken
-                );
-
-                // Create the key that will be used for dataprotection feature.
-                _dataprotectionKey = await iiotKeyVaultClient.CreateDataprotectionKeyAsync(
-                    IIoTKeyVaultClient.DATAPROTECTION_KEY_NAME,
-                    _defaultTagsDict,
-                    cancellationToken
-                );
-            }
+            // Add required elements to KeyVault
+            var setupKeyVaultTask = SetupKeyVaultAsync(keyVault, cancellationToken);
 
             // Create Operational Insights workspace.
             var operationalInsightsWorkspaceCreationTask = _operationalInsightsManagementClient
@@ -821,12 +790,14 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                 );
 
             // Create AKS cluster
-            var operationalInsightsWorkspace = operationalInsightsWorkspaceCreationTask.Result;
+            // We have to wait for setupKeyVaultTask to finish before using _aksClusterX509Certificate.
+            await setupKeyVaultTask;
+            var operationalInsightsWorkspace = await operationalInsightsWorkspaceCreationTask;
 
             var clusterDefinition = _aksManagementClient.GetClusterDefinition(
                 _resourceGroup,
                 _applicationsManager.GetAKSApplication(),
-                _applicationsManager.GetAKSApplicationRbacSecret(),
+                _applicationsManager.GetAKSApplicationSecret(),
                 _aksClusterName,
                 _aksClusterX509Certificate,
                 virtualNetworkAksSubnet,
@@ -843,23 +814,25 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                 );
 
             // Create Storage Account
-            StorageAccountInner storageAccountGen1;
-            string storageAccountGen1ConectionString;
+            StorageAccountInner storageAccountGen2;
+            string storageAccountGen2ConectionString;
             BlobContainerInner iotHubBlobContainer;
             BlobContainerInner dataprotectionBlobContainer;
+            BlobContainerInner deploymentScriptsBlobContainer;
 
-            storageAccountGen1 = await _storageManagementClient
-                .CreateStorageAccountGen1Async(
+            storageAccountGen2 = await _storageManagementClient
+                .CreateStorageAccountGen2Async(
                     _resourceGroup,
-                    _storageAccountGen1Name,
+                    _storageAccountGen2Name,
+                    false,
                     _defaultTagsDict,
                     cancellationToken
                 );
 
-            storageAccountGen1ConectionString = await _storageManagementClient
+            storageAccountGen2ConectionString = await _storageManagementClient
                 .GetStorageAccountConectionStringAsync(
                     _resourceGroup,
-                    storageAccountGen1,
+                    storageAccountGen2,
                     cancellationToken
                 );
 
@@ -867,7 +840,7 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
             iotHubBlobContainer= await _storageManagementClient
                 .CreateBlobContainerAsync(
                     _resourceGroup,
-                    storageAccountGen1,
+                    storageAccountGen2,
                     StorageMgmtClient.STORAGE_ACCOUNT_IOT_HUB_CONTAINER_NAME,
                     PublicAccess.None,
                     _defaultTagsDict,
@@ -878,30 +851,50 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
             dataprotectionBlobContainer = await _storageManagementClient
                 .CreateBlobContainerAsync(
                     _resourceGroup,
-                    storageAccountGen1,
+                    storageAccountGen2,
                     StorageMgmtClient.STORAGE_ACCOUNT_DATAPROTECTION_CONTAINER_NAME,
                     PublicAccess.None,
                     _defaultTagsDict,
                     cancellationToken
                 );
 
-            // Create Storage Account Gen2
-            StorageAccountInner storageAccountGen2;
-            BlobContainerInner powerbiContainer;
-
-            storageAccountGen2 = await _storageManagementClient
-                .CreateStorageAccountGen2Async(
+            // Create Blob container for deployment scripts.
+            deploymentScriptsBlobContainer = await _storageManagementClient
+                .CreateBlobContainerAsync(
                     _resourceGroup,
-                    _storageAccountGen2Name,
+                    storageAccountGen2,
+                    StorageMgmtClient.STORAGE_ACCOUNT_DEPLOYMENT_SCRIPTS_CONTAINER_NAME,
+                    PublicAccess.None,
                     _defaultTagsDict,
                     cancellationToken
                 );
 
-            // Create Blob container for IoT Hub storage.
+            // Create Storage Account Gen2 with hierarchical namespace enabled.
+            StorageAccountInner storageAccountGen2HNS;
+            string storageAccountGen2HNSConectionString;
+            BlobContainerInner powerbiContainer;
+
+            storageAccountGen2HNS = await _storageManagementClient
+                .CreateStorageAccountGen2Async(
+                    _resourceGroup,
+                    _storageAccountGen2HNSName,
+                    true,
+                    _defaultTagsDict,
+                    cancellationToken
+                );
+
+            storageAccountGen2HNSConectionString = await _storageManagementClient
+                .GetStorageAccountConectionStringAsync(
+                    _resourceGroup,
+                    storageAccountGen2HNS,
+                    cancellationToken
+                );
+
+            // Create Blob container for PowerBI storage.
             powerbiContainer = await _storageManagementClient
                 .CreateBlobContainerAsync(
                     _resourceGroup,
-                    storageAccountGen2,
+                    storageAccountGen2HNS,
                     StorageMgmtClient.STORAGE_ACCOUNT_POWERBI_CONTAINER_NAME,
                     PublicAccess.None,
                     _defaultTagsDict,
@@ -915,15 +908,16 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                 .CreateIotHubAsync(
                     _resourceGroup,
                     _iotHubName,
+                    IotHubMgmtClient.IOT_HUB_EVENT_HUB_RETENTION_TIME_IN_DAYS,
                     IotHubMgmtClient.IOT_HUB_EVENT_HUB_PARTITIONS_COUNT,
-                    storageAccountGen1ConectionString,
-                    StorageMgmtClient.STORAGE_ACCOUNT_IOT_HUB_CONTAINER_NAME,
+                    storageAccountGen2ConectionString,
+                    iotHubBlobContainer.Name,
                     _defaultTagsDict,
                     cancellationToken
                 );
 
             // Create "events" consumer group.
-            await _iotHubManagementClient
+            var iotHubEventHubCGEvents = await _iotHubManagementClient
                 .CreateEventHubConsumerGroupAsync(
                     _resourceGroup,
                     iotHub,
@@ -933,7 +927,7 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                 );
 
             // Create "telemetry" consumer group.
-            await _iotHubManagementClient
+            var iotHubEventHubCGTelemetry = await _iotHubManagementClient
                 .CreateEventHubConsumerGroupAsync(
                     _resourceGroup,
                     iotHub,
@@ -981,6 +975,8 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                     _resourceGroup,
                     eventHubNamespace,
                     _eventHubName,
+                    EventHubMgmtClient.DEFAULT_MESSAGE_RETENTION_IN_DAYS,
+                    EventHubMgmtClient.DEFUALT_PARTITION_COUNT,
                     _defaultTagsDict,
                     cancellationToken
                 );
@@ -1005,29 +1001,6 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                     cancellationToken
                 );
 
-            // Create AppService Plan to host the Application Gateway Web App
-            var appServicePlan = await _webSiteManagementClient
-                .CreateAppServicePlanAsync(
-                    _resourceGroup,
-                    _appServicePlanName,
-                    _defaultTagsDict,
-                    cancellationToken
-                );
-
-            // This will point to PublicIP address of Ingress.
-            var emptyRemoteEndpoint = "";
-
-            var webSiteCreationTask = _webSiteManagementClient
-                .CreateSiteAsync(
-                    _resourceGroup,
-                    appServicePlan,
-                    _azureWebsiteName,
-                    emptyRemoteEndpoint,
-                    _webAppX509Certificate,
-                    _defaultTagsDict,
-                    cancellationToken
-                );
-
             // SignalR
             var signalRCreationTask = _signalRManagementClient
                 .CreateAsync(
@@ -1046,7 +1019,7 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                     cancellationToken
                 );
 
-            var cosmosDBAccount = cosmosDBAccountCreationTask.Result;
+            var cosmosDBAccount = await cosmosDBAccountCreationTask;
             var cosmosDBAccountConnectionString = await _cosmosDBManagementClient
                 .GetCosmosDBAccountConnectionStringAsync(
                     _resourceGroup,
@@ -1061,7 +1034,7 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                     cancellationToken
                 );
 
-            var serviceBusNamespace = serviceBusNamespaceCreationTask.Result;
+            var serviceBusNamespace = await serviceBusNamespaceCreationTask;
             var serviceBusNamespaceConnectionString = await _serviceBusManagementClient
                 .GetServiceBusNamespaceConnectionStringAsync(
                     _resourceGroup,
@@ -1069,14 +1042,7 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                     cancellationToken
                 );
 
-            var storageAccountKey = await _storageManagementClient
-                .GetStorageAccountKeyAsync(
-                    _resourceGroup,
-                    storageAccountGen1,
-                    cancellationToken
-                );
-
-            var signalR = signalRCreationTask.Result;
+            var signalR = await signalRCreationTask;
             var signalRConnectionString = await _signalRManagementClient
                 .GetConnectionStringAsync(
                     _resourceGroup,
@@ -1084,40 +1050,143 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                     cancellationToken
                 );
 
-            var applicationInsightsComponent = applicationInsightsComponentCreationTask.Result;
-            var webSite = webSiteCreationTask.Result;
+            var applicationInsightsComponent = await applicationInsightsComponentCreationTask;
+
+            // Wat for Public IP of AKS before creating IIoTEnvironment
+            var aksCluster = await aksClusterCreationTask;
+
+            // Create a PublicIP address in AKS node resource group
+            var aksPublicIpName = "aks-public-ip";
+            var aksPublicIpDomainNameLabel = _applicationName.ToLower();
+
+            var aksPublicIp = await CreateAksPublicIPAsync(
+                aksCluster,
+                aksPublicIpName,
+                aksPublicIpDomainNameLabel,
+                cancellationToken
+            );
+
+            var serviceURL = $"https://{aksPublicIp.DnsSettings.Fqdn}";
 
             var iiotEnvironment = new IIoTEnvironment(
                 _authConf.AzureEnvironment,
                 _authConf.TenantId,
+                // IoT Hub
                 iotHub,
                 iotHubOwnerConnectionString,
                 IotHubMgmtClient.IOT_HUB_EVENT_HUB_EVENTS_ENDPOINT_NAME,
-                IotHubMgmtClient.IOT_HUB_EVENT_HUB_EVENTS_CONSUMER_GROUP_NAME,
+                iotHubEventHubCGEvents,
+                iotHubEventHubCGTelemetry,
+                // Cosmos DB
                 cosmosDBAccountConnectionString,
-                storageAccountGen1,
-                storageAccountKey,
+                // Storage Account
+                storageAccountGen2ConectionString,
+                dataprotectionBlobContainer.Name,
+                // ADLS Gen2 Storage Account with enabled HNS
+                storageAccountGen2HNSConectionString,
+                powerbiContainer.Name,
+                StorageMgmtClient.POWERBI_ROOT_FOLDER,
+                // Event Hub Namespace
                 eventHub,
                 eventHubNamespaceConnectionString,
+                telemetryCdm,
+                telemetryUx,
+                // Service Bus
                 serviceBusNamespaceConnectionString,
+                // SignalR
                 signalRConnectionString,
+                // Key Vault
                 keyVault,
-                operationalInsightsWorkspace,
+                IIoTKeyVaultClient.DATAPROTECTION_KEY_NAME,
+                // Application Insights
                 applicationInsightsComponent,
-                webSite,
+                serviceURL,
                 _applicationsManager.GetServiceApplication(),
-                _applicationsManager.GetClientApplication()
+                _applicationsManager.GetServiceApplicationSecret(),
+                _applicationsManager.GetClientApplication(),
+                _applicationsManager.GetClientApplicationSecret()
             );
 
+            // We will push iiotEnvironment to KeyVault so that Azure IIoT
+            // components can consume configuration from there.
+            var keyVaultConfCreationTask = PushIIoTEnvironmentToKeyVaultAsync(
+                keyVault, iiotEnvironment, cancellationToken);
+
+            // Create and setup a jumpbox for AKS.
+
+            // First we need to upload jumpbox setup script to Blob Container.
+            const string blobName = "jumpbox.sh";
+            var jumpboxShUri = await UploadBlobAsync(
+                storageAccountGen2ConectionString,
+                deploymentScriptsBlobContainer.Name,
+                blobName,
+                Resources.Scripts.jumpbox,
+                cancellationToken
+            );
+
+            const string jumpboxPublicIpName = "jumpbox-ip";
+            const string jumpboxNetworkInterfaceName = "jumpbox-networkInterface";
+            const string jumpboxVirtualMachineName = "jumpbox-vm";
+
+            var jumpboxUsername = "jumpboxuser";
+            var jumpboxPassword = Guid.NewGuid().ToString();
+
+            var aksRoleType = "AzureKubernetesServiceClusterAdminRole";
+            var aksRoleGuid = Guid.NewGuid();
+            var storageRoleType = "StorageBlobDataReader";
+            var storageRoleGuid = Guid.NewGuid();
+
+            var jumpboxDeploymentParameters = new Dictionary<string, object> {
+                {"nsgId", networkSecurityGroup.Id},
+                {"subnetId", virtualNetworkVmSubnet.Id},
+                {"aksClusterName", aksCluster.Name},
+                {"aksPublicIpAddress", aksPublicIp.IpAddress},
+                {"aksPublicIpDnsLabel", aksPublicIp.DnsSettings.DomainNameLabel},
+                {"publicIpName", jumpboxPublicIpName},
+                {"networkInterfaceName", jumpboxNetworkInterfaceName},
+                {"virtualMachineName", jumpboxVirtualMachineName},
+                {"virtualMachineUsername", jumpboxUsername},
+                {"virtualMachinePassword", jumpboxPassword},
+                {"aksBuiltInRoleType", aksRoleType},
+                {"aksRbacGuid", aksRoleGuid.ToString()},
+                {"storageBuiltInRoleType", storageRoleType},
+                {"storageRbacGuid", storageRoleGuid.ToString()},
+                {"scriptFileUris", new List<string> { jumpboxShUri } }
+            };
+
+            var jumpboxDeployment = await _resourceManagementClient
+                .CreateResourceGroupDeploymentAsync(
+                    _resourceGroup,
+                    "jumpbox-vm",
+                    Resources.ArmTemplates.jumpbox_vm,
+                    jumpboxDeploymentParameters,
+                    DeploymentMode.Incremental,
+                    _defaultTagsDict,
+                    cancellationToken
+                );
+
+            var jumpboxDeploymentOutput = ResourceMgmtClient
+                .ExtractDeploymentOutput(jumpboxDeployment);
+
+            // Output jumpbox credentials so that users can login into it.
+            OutputJumpboxCredentials(jumpboxUsername, jumpboxPassword);
+
+            // Stop jumpbox.
+            var jumpboxVirtualMachine = await _computeManagementClient
+                .GetVMAsync(
+                    _resourceGroup,
+                    jumpboxVirtualMachineName,
+                    cancellationToken
+                );
+            await _computeManagementClient
+                .BeginDeallocateVMAsync(
+                    _resourceGroup,
+                    jumpboxVirtualMachine,
+                    cancellationToken
+                );
+
             // Deploy IIoT services to AKS cluster
-
-            // Generate default SSL certificate for NGINX Ingress
-            var webAppPemCertificate = X509CertificateHelper.GetPemCertificate(_webAppX509Certificate);
-            //var webAppPemPublicKey = X509CertificateHelper.GetPemPublicKey(webAppX509Certificate);
-            var webAppPemPrivateKey = X509CertificateHelper.GetPemPrivateKey(_webAppX509Certificate);
-
             // Get KubeConfig
-            var aksCluster = aksClusterCreationTask.Result;
             var aksKubeConfig = await _aksManagementClient
                 .GetClusterAdminCredentialsAsync(
                     _resourceGroup,
@@ -1125,62 +1194,20 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
                     cancellationToken
                 );
 
-            var iiotK8SClient = new IIoTK8SClient(aksKubeConfig);
+            await DeployResourcesToAksAsync(
+                aksKubeConfig,
+                iiotEnvironment,
+                aksPublicIp.DnsSettings.Fqdn,
+                cancellationToken
+            );
 
-            // industrial-iot namespace
-            iiotK8SClient.CreateIIoTNamespaceAsync(cancellationToken).Wait();
-            iiotK8SClient.SetupIIoTServiceAccountAsync(cancellationToken).Wait();
-            iiotK8SClient.CreateIIoTEnvSecretAsync(iiotEnvironment.Dict, cancellationToken).Wait();
-            iiotK8SClient.DeployIIoTServicesAsync(cancellationToken).Wait();
-
-            // We will add default SSL certificate for Ingress
-            // NGINX controler to industrial-iot namespace
-            iiotK8SClient
-                .CreateNGINXDefaultSSLCertificateSecretAsync(
-                    webAppPemCertificate,
-                    webAppPemPrivateKey,
-                    cancellationToken
-                )
-                .Wait();
-
-            // ingress-nginx namespace
-            iiotK8SClient.CreateNGINXNamespaceAsync(cancellationToken).Wait();
-            iiotK8SClient.SetupNGINXServiceAccountAsync(cancellationToken).Wait();
-            iiotK8SClient.DeployNGINXIngressControllerAsync(cancellationToken).Wait();
-
-            // After we have NGINX Ingress controller we can create Ingress
-            // for our Industrial IoT services and wait for IP address of
-            // its LoadBalancer.
-            var iiotIngress = await iiotK8SClient.CreateIIoTIngressAsync(cancellationToken);
-            var iiotIngressIPAddresses = await iiotK8SClient.WaitForIngressIPAsync(iiotIngress, cancellationToken);
-            var iiotIngressIPAdress = iiotIngressIPAddresses.FirstOrDefault().Ip;
-
-            // Update remote endpoint and certificate thumbprint application settings
-            // of App Servise.
-            var iiotIngressRemoteEndpoint = $"https://{iiotIngressIPAdress}";
-            await _webSiteManagementClient
-                .UpdateSiteApplicationSettingsAsync(
-                    _resourceGroup,
-                    webSite,
-                    iiotIngressRemoteEndpoint,
-                    _webAppX509Certificate,
-                    cancellationToken
-                );
-
-            // Deploy reverse proxy to App Service. It will consume values of remote
-            // endpoint and certificate thumbprint application settings of App Service.
-            var proxySiteSourceControl = await _webSiteManagementClient
-                .DeployProxyAsync(
-                    _resourceGroup,
-                    webSite,
-                    _defaultTagsDict,
-                    cancellationToken
-                );
-
-            // After we have deployed proxy to App Service, we will update 
-            // client application to have redirect URIs for App Service.
+            // After we have endpoint for accessing Azure IIoT microservices we
+            // will update client application to have Redirect URIs.
             // This will be performed in UpdateClientApplicationRedirectUrisAsync() call.
-            _applicationURL = webSite.DefaultHostName;
+            _applicationURL = aksPublicIp.DnsSettings.Fqdn;
+
+            // Waiting for unfinished tasks.
+            await keyVaultConfCreationTask;
 
             // Check if we want to save environment to .env file
             try {
@@ -1193,6 +1220,284 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
             }
         }
 
+        /// <summary>
+        /// Add the following elements to KeyVault:
+        ///     - Certificate for SSH access of AKS
+        ///     - Dataprotection key
+        /// </summary>
+        /// <param name="keyVault"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        protected async Task SetupKeyVaultAsync(
+            VaultInner keyVault,
+            CancellationToken cancellationToken = default
+        ) {
+            if (keyVault is null) {
+                throw new ArgumentNullException(nameof(keyVault));
+            }
+
+            var keyVaultAuthenticationCallback = new IIoTKeyVaultClient.AuthenticationCallback(
+                async (authority, resource, scope) => {
+                    // Fetch AccessToken from cache.
+                    var authenticationResult = await _authenticationManager
+                        .AcquireKeyVaultAuthenticationResultAsync(cancellationToken);
+
+                    return authenticationResult.AccessToken;
+                }
+            );
+
+            using (var iiotKeyVaultClient = new IIoTKeyVaultClient(keyVaultAuthenticationCallback, keyVault)) {
+                // This will be SSH certificate for accessing AKS cluster.
+                await iiotKeyVaultClient.CreateCertificateAsync(
+                    IIoTKeyVaultClient.AKS_CLUSTER_CERT_NAME,
+                    kAKS_CLUSTER_CN,
+                    _defaultTagsDict,
+                    cancellationToken
+                );
+
+                var aksClusterX509CertificateGetTask = iiotKeyVaultClient.GetCertificateAsync(
+                    IIoTKeyVaultClient.AKS_CLUSTER_CERT_NAME,
+                    cancellationToken
+                );
+
+                // Create the key that will be used for dataprotection feature.
+                await iiotKeyVaultClient.CreateDataprotectionKeyAsync(
+                    IIoTKeyVaultClient.DATAPROTECTION_KEY_NAME,
+                    _defaultTagsDict,
+                    cancellationToken
+                );
+
+                _aksClusterX509Certificate = await aksClusterX509CertificateGetTask;
+            }
+        }
+
+        /// <summary>
+        /// Push elements of IIoTEnvironment to KeyVault.
+        /// </summary>
+        /// <param name="keyVault"></param>
+        /// <param name="iioTEnvironment"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        protected async Task PushIIoTEnvironmentToKeyVaultAsync(
+            VaultInner keyVault,
+            IIoTEnvironment iioTEnvironment,
+            CancellationToken cancellationToken = default
+        ) {
+            if (keyVault is null) {
+                throw new ArgumentNullException(nameof(keyVault));
+            }
+            if (iioTEnvironment is null) {
+                throw new ArgumentNullException(nameof(iioTEnvironment));
+            }
+
+            const string keyK = "key";
+            const string valueK = "value";
+
+            const string deploymentName = "configuration";
+
+            try {
+                var configurationList = new List<Dictionary<string, string>>();
+                foreach (var kvp in iioTEnvironment.Dict) {
+                    configurationList.Add(new Dictionary<string, string> {
+                        { keyK,  kvp.Key },
+                        { valueK, kvp.Value }
+                    });
+                }
+
+                var parameters = new Dictionary<string, object> {
+                    {"keyVaultName", keyVault.Name},
+                    {"configuration", configurationList}
+                };
+
+                Log.Information("Pushing IIoT configuration parameters to Key Vault...");
+                await _resourceManagementClient
+                    .CreateResourceGroupDeploymentAsync(
+                        _resourceGroup,
+                        deploymentName,
+                        Resources.ArmTemplates.configuration,
+                        parameters,
+                        DeploymentMode.Incremental,
+                        _defaultTagsDict,
+                        cancellationToken
+                    );
+
+                Log.Information("Pushed IIoT configuration parameters to Key Vault.");
+            }
+            catch (Exception) {
+                Log.Information("Failed to push IIoT configuration parameters to Key Vault.");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Create blob with given content. Returns blob's URL.
+        /// </summary>
+        /// <param name="storageAccountConectionString"></param>
+        /// <param name="blobContainer"></param>
+        /// <param name="blobName"></param>
+        /// <param name="blobContent"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        protected async Task<string> UploadBlobAsync(
+            string storageAccountConectionString,
+            string blobContainerName,
+            string blobName,
+            string blobContent,
+            CancellationToken cancellationToken = default
+        ) {
+            if (string.IsNullOrWhiteSpace(storageAccountConectionString)) {
+                throw new ArgumentNullException(nameof(storageAccountConectionString));
+            }
+            if (string.IsNullOrWhiteSpace(blobContainerName)) {
+                throw new ArgumentNullException(nameof(blobContainerName));
+            }
+            if (string.IsNullOrWhiteSpace(blobName)) {
+                throw new ArgumentNullException(nameof(blobName));
+            }
+            // blobContent can be an empty string, but it should not be null.
+            if (blobContent is null) {
+                throw new ArgumentNullException(nameof(blobContent));
+            }
+
+            Log.Debug("Uploading data to Azure Blob ...");
+            var blobServiceClient = new BlobServiceClient(storageAccountConectionString);
+            var blobContainerClient = blobServiceClient.GetBlobContainerClient(blobContainerName);
+            var blobClient = blobContainerClient.GetBlobClient(blobName);
+
+            var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(blobContent));
+            await blobClient.UploadAsync(memoryStream, cancellationToken);
+
+            Log.Debug("Uploadede data to Azure Blob.");
+            return blobClient.Uri.ToString();
+        }
+
+        /// <summary>
+        /// Deploy all necessary resources to AKS, including Azure IIoT components.
+        /// Returns IP address of Azure IIoT Ingress.
+        /// </summary>
+        /// <param name="kubeConfig"></param>
+        /// <param name="iiotEnvironment"></param>
+        /// <param name="defaultSslCertificate"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        protected async Task<string> DeployResourcesToAksAsync(
+            string kubeConfig,
+            IIoTEnvironment iiotEnvironment,
+            string ingressHostname = null,
+            CancellationToken cancellationToken = default
+        ) {
+            if (string.IsNullOrWhiteSpace(kubeConfig)) {
+                throw new ArgumentNullException(nameof(kubeConfig));
+            }
+            if (iiotEnvironment is null) {
+                throw new ArgumentNullException(nameof(iiotEnvironment));
+            }
+
+            var iiotK8SClient = new IIoTK8SClient(kubeConfig);
+
+            // enable scraping of Prometheus metrics
+            await iiotK8SClient.EnablePrometheusMetricsScrapingAsync(cancellationToken);
+
+            // Create a ClusterIssuer that uses Let's Encrypt 
+            await iiotK8SClient.CreateLetsencryptClusterIssuerAsync(cancellationToken);
+
+            // industrial-iot namespace
+            await iiotK8SClient.CreateIIoTNamespaceAsync(cancellationToken);
+            await iiotK8SClient.SetupIIoTServiceAccountAsync(cancellationToken);
+            await iiotK8SClient.DeployIIoTServicesAsync(iiotEnvironment.Dict, cancellationToken);
+
+            // Note that NGINX Ingress Controller is already instaled from jumpbox.
+            // So we will create Ingress for our Industrial IoT services and wait for
+            // IP address of its LoadBalancer.
+            var iiotIngress = await iiotK8SClient.CreateIIoTIngressAsync(ingressHostname, cancellationToken);
+            var iiotIngressIPAddresses = await iiotK8SClient.WaitForIngressIPAsync(iiotIngress, cancellationToken);
+            var iiotIngressIPAdress = iiotIngressIPAddresses.FirstOrDefault().Ip;
+
+            return iiotIngressIPAdress;
+        }
+
+        /// <summary>
+        /// Get Public IP SKU of the same kind.
+        /// </summary>
+        /// <param name="loadBalancerSku"></param>
+        /// <returns></returns>
+        protected static string ToPublicIpSku(
+            Management.ContainerService.Fluent.Models.LoadBalancerSku loadBalancerSku
+        ) {
+            if (loadBalancerSku == Management.ContainerService.Fluent.Models.LoadBalancerSku.Basic) {
+                return "Basic";
+            } else if (loadBalancerSku == Management.ContainerService.Fluent.Models.LoadBalancerSku.Standard) {
+                return "Standard";
+            } else {
+                throw new ArgumentException($"Unknows LoadBalancerSku: {loadBalancerSku}");
+            }
+        }
+
+        /// <summary>
+        /// Create a Public IP resource in AKS node resource group.
+        /// </summary>
+        /// <param name="aksCluster"></param>
+        /// <param name="publicIpName"></param>
+        /// <param name="publicIpDomainNameLabel"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        protected async Task<PublicIPAddressInner> CreateAksPublicIPAsync(
+            ManagedClusterInner aksCluster,
+            string publicIpName,
+            string publicIpDomainNameLabel,
+            CancellationToken cancellationToken = default
+        ) {
+            if (aksCluster is null) {
+                throw new ArgumentNullException(nameof(aksCluster));
+            }
+            if (string.IsNullOrWhiteSpace(publicIpName)) {
+                throw new ArgumentNullException(nameof(publicIpName));
+            }
+            if (string.IsNullOrWhiteSpace(publicIpDomainNameLabel)) {
+                throw new ArgumentNullException(nameof(publicIpDomainNameLabel));
+            }
+
+            Log.Information("Creating Azure Public IP for AKS cluster ...");
+
+            // We will create a PublicIP address in AKS node resource group.
+            var aksNodeResourceGroup = await _azureResourceManager
+                .GetResourceGroupAsync(
+                    aksCluster.NodeResourceGroup,
+                    cancellationToken
+                );
+
+            // Public IP resource should have the same SKU as AKS cluster Load Balancer.
+            var aksPublicIpSku = ToPublicIpSku(aksCluster.NetworkProfile.LoadBalancerSku);
+
+            var aksPublicIpDeploymentParameters = new Dictionary<string, object> {
+                {"publicIpName", publicIpName},
+                {"publicIpSku", aksPublicIpSku},
+                {"publicIpDomainNameLabel", publicIpDomainNameLabel},
+            };
+
+            const string aksPublicIpDeploymentName = "aks-public-ip";
+            var aksPublicIpDeployment = await _resourceManagementClient
+                .CreateResourceGroupDeploymentAsync(
+                    aksNodeResourceGroup,
+                    aksPublicIpDeploymentName,
+                    Resources.ArmTemplates.aks_public_ip,
+                    aksPublicIpDeploymentParameters,
+                    DeploymentMode.Incremental,
+                    _defaultTagsDict,
+                    cancellationToken
+                );
+
+            var aksPublicIp = await _networkManagementClient
+                .GetPublicIPAddressAsync(
+                    aksNodeResourceGroup,
+                    publicIpName,
+                    cancellationToken
+                );
+
+            Log.Information("Created Azure Public IP for AKS cluster.");
+            return aksPublicIp;
+        }
+
         public void Dispose() {
             static void disposeIfNotNull(IDisposable disposable) {
                 if (null != disposable) {
@@ -1201,10 +1506,10 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
             };
 
             // Certificates
-            disposeIfNotNull(_webAppX509Certificate);
             disposeIfNotNull(_aksClusterX509Certificate);
 
             // Resource management classes
+            disposeIfNotNull(_resourceManagementClient);
             disposeIfNotNull(_keyVaultManagementClient);
             disposeIfNotNull(_storageManagementClient);
             disposeIfNotNull(_iotHubManagementClient);
@@ -1218,6 +1523,7 @@ namespace Microsoft.Azure.IIoT.Deployment.Deployment {
             disposeIfNotNull(_authorizationManagementClient);
             disposeIfNotNull(_aksManagementClient);
             disposeIfNotNull(_signalRManagementClient);
+            disposeIfNotNull(_computeManagementClient);
         }
     }
 }

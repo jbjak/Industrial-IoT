@@ -57,9 +57,7 @@ call :generate_doc_for_service publisher
 call :generate_doc_for_service registry
 call :generate_doc_for_service history
 call :generate_doc_for_service vault
-
-rem call :generate_doc_for_service jobs
-rem call :generate_doc_for_service onboarding
+call :generate_doc_for_service events
 
 set service=
 set convert=

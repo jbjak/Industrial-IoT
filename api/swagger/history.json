@@ -30,10 +30,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -60,14 +64,7 @@
               "$ref": "#/definitions/HistoryUpdateResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/delete/{endpointId}/values": {
@@ -82,10 +79,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -112,14 +113,7 @@
               "$ref": "#/definitions/HistoryUpdateResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/delete/{endpointId}/values/modified": {
@@ -134,10 +128,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -164,14 +162,7 @@
               "$ref": "#/definitions/HistoryUpdateResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/delete/{endpointId}/events": {
@@ -186,10 +177,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -216,14 +211,7 @@
               "$ref": "#/definitions/HistoryUpdateResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/history/read/{endpointId}": {
@@ -238,10 +226,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -257,7 +249,7 @@
             "description": "The history read request",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/JTokenHistoryReadRequestApiModel"
+              "$ref": "#/definitions/VariantValueHistoryReadRequestApiModel"
             }
           }
         ],
@@ -265,17 +257,10 @@
           "200": {
             "description": "Success",
             "schema": {
-              "$ref": "#/definitions/JTokenHistoryReadResponseApiModel"
+              "$ref": "#/definitions/VariantValueHistoryReadResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/history/read/{endpointId}/next": {
@@ -290,10 +275,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -317,17 +306,10 @@
           "200": {
             "description": "Success",
             "schema": {
-              "$ref": "#/definitions/JTokenHistoryReadNextResponseApiModel"
+              "$ref": "#/definitions/VariantValueHistoryReadNextResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/history/update/{endpointId}": {
@@ -342,10 +324,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -361,7 +347,7 @@
             "description": "The history update request",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/JTokenHistoryUpdateRequestApiModel"
+              "$ref": "#/definitions/VariantValueHistoryUpdateRequestApiModel"
             }
           }
         ],
@@ -372,14 +358,7 @@
               "$ref": "#/definitions/HistoryUpdateResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/insert/{endpointId}/values": {
@@ -394,10 +373,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -424,14 +407,7 @@
               "$ref": "#/definitions/HistoryUpdateResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/insert/{endpointId}/events": {
@@ -446,10 +422,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -476,14 +456,7 @@
               "$ref": "#/definitions/HistoryUpdateResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/read/{endpointId}/events": {
@@ -498,10 +471,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -528,14 +505,7 @@
               "$ref": "#/definitions/HistoricEventApiModelArrayHistoryReadResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/read/{endpointId}/events/next": {
@@ -550,10 +520,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -580,14 +554,7 @@
               "$ref": "#/definitions/HistoricEventApiModelArrayHistoryReadNextResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/read/{endpointId}/values": {
@@ -602,10 +569,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -632,14 +603,7 @@
               "$ref": "#/definitions/HistoricValueApiModelArrayHistoryReadResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/read/{endpointId}/values/pick": {
@@ -654,10 +618,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -684,14 +652,7 @@
               "$ref": "#/definitions/HistoricValueApiModelArrayHistoryReadResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/read/{endpointId}/values/processed": {
@@ -706,10 +667,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -736,14 +701,7 @@
               "$ref": "#/definitions/HistoricValueApiModelArrayHistoryReadResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/read/{endpointId}/values/modified": {
@@ -758,10 +716,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -788,14 +750,7 @@
               "$ref": "#/definitions/HistoricValueApiModelArrayHistoryReadResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/read/{endpointId}/values/next": {
@@ -810,10 +765,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -840,14 +799,7 @@
               "$ref": "#/definitions/HistoricValueApiModelArrayHistoryReadNextResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/replace/{endpointId}/values": {
@@ -862,10 +814,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -892,14 +848,7 @@
               "$ref": "#/definitions/HistoryUpdateResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/history/v2/replace/{endpointId}/events": {
@@ -914,10 +863,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -944,14 +897,7 @@
               "$ref": "#/definitions/HistoryUpdateResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     }
   },
@@ -1238,9 +1184,8 @@
         }
       }
     },
-    "JTokenHistoryReadRequestApiModel": {
+    "VariantValueHistoryReadRequestApiModel": {
       "description": "Request node history read",
-      "type": "object",
       "properties": {
         "nodeId": {
           "description": "Node to read from (mandatory)",
@@ -1265,9 +1210,8 @@
         }
       }
     },
-    "JTokenHistoryReadResponseApiModel": {
+    "VariantValueHistoryReadResponseApiModel": {
       "description": "History read results",
-      "type": "object",
       "properties": {
         "history": {
           "description": "History as json encoded extension object"
@@ -1294,7 +1238,6 @@
         },
         "abort": {
           "description": "Abort reading after this read",
-          "default": false,
           "type": "boolean"
         },
         "header": {
@@ -1302,9 +1245,8 @@
         }
       }
     },
-    "JTokenHistoryReadNextResponseApiModel": {
+    "VariantValueHistoryReadNextResponseApiModel": {
       "description": "History read continuation result",
-      "type": "object",
       "properties": {
         "history": {
           "description": "History as json encoded extension object"
@@ -1318,12 +1260,11 @@
         }
       }
     },
-    "JTokenHistoryUpdateRequestApiModel": {
+    "VariantValueHistoryUpdateRequestApiModel": {
       "description": "Request node history update",
       "required": [
         "details"
       ],
-      "type": "object",
       "properties": {
         "nodeId": {
           "description": "Node to update",
@@ -1629,8 +1570,9 @@
       "properties": {
         "eventFields": {
           "description": "The selected fields of the event",
-          "type": "array",
-          "items": { }
+          "items": {
+            "description": "Represents primitive or structurally complex value"
+          }
         }
       }
     },
@@ -2130,14 +2072,11 @@
     }
   },
   "securityDefinitions": {
-    "oauth2": {
-      "type": "oauth2",
-      "flow": "implicit",
-      "authorizationUrl": "https://login.microsoftonline.com/6e660ce4-d51a-4585-80c6-58035e212354/oauth2/authorize",
-      "scopes": {
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication": "Access http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication operations"
-      },
-      "description": "Implicit oauth2 token flow."
+    "bearer": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "Authorization token in the form of 'bearer <token>'"
     }
   },
   "tags": [

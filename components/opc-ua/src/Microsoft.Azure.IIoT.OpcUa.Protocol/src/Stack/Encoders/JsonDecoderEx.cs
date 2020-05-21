@@ -210,11 +210,11 @@ namespace Opc.Ua.Encoders {
             }
             if (token.Type == JTokenType.String) {
                 return XmlConvert.ToDateTime((string)token,
-                    XmlDateTimeSerializationMode.Utc);
+                    XmlDateTimeSerializationMode.Utc).ToOpcUaUniversalTime();
             }
             var value = token.ToObject<DateTime?>();
             if (value != null) {
-                return value.Value;
+                return value.Value.ToOpcUaUniversalTime();
             }
             return DateTime.MinValue;
         }
@@ -1695,9 +1695,14 @@ namespace Opc.Ua.Encoders {
             if (_reader == null) {
                 return null;
             }
+            if (_reader.TokenType == JsonToken.EndObject && 
+                string.IsNullOrEmpty(_reader.Path)) {
+                return null;
+            }
             if (_reader is JsonLoader loader) {
                 loader.Reset();
             }
+
             var root = JToken.ReadFrom(_reader,
                 new JsonLoadSettings {
                     CommentHandling = CommentHandling.Ignore,

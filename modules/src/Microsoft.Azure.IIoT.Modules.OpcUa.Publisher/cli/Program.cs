@@ -12,6 +12,9 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Cli {
     using Microsoft.Azure.IIoT.Hub;
     using Microsoft.Azure.IIoT.Hub.Client;
     using Microsoft.Azure.IIoT.Hub.Models;
+    using Microsoft.Azure.IIoT.Exceptions;
+    using Microsoft.Azure.IIoT.Serializers.NewtonSoft;
+    using Microsoft.Azure.IIoT.Serializers;
     using Microsoft.Extensions.Configuration;
     using Serilog;
     using Serilog.Events;
@@ -23,7 +26,6 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Cli {
     using System.Runtime.InteropServices;
     using System.Threading;
     using System.Threading.Tasks;
-    using Newtonsoft.Json.Linq;
 
     /// <summary>
     /// Publisher module host process
@@ -40,10 +42,12 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Cli {
             string deviceId = null, moduleId = null;
             Console.WriteLine("Publisher module command line interface.");
             var configuration = new ConfigurationBuilder()
+                .AddFromDotEnvFile()
                 .AddEnvironmentVariables()
                 .AddEnvironmentVariables(EnvironmentVariableTarget.User)
-                .AddFromDotEnvFile()
-                .AddFromKeyVault()
+                // Above configuration providers will provide connection
+                // details for KeyVault configuration provider.
+                .AddFromKeyVault(providerPriority: ConfigurationProviderPriority.Lowest)
                 .Build();
             var cs = configuration.GetValue<string>(PcsVariable.PCS_IOTHUB_CONNSTRING, null);
             if (string.IsNullOrEmpty(cs)) {
@@ -97,7 +101,7 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Cli {
                     Console.WriteLine($"Using <deviceId> '{deviceId}'");
                 }
                 if (moduleId == null) {
-                    moduleId = "opcpublisher";
+                    moduleId = "publisher";
                     Console.WriteLine($"Using <moduleId> '{moduleId}'");
                 }
 
@@ -162,13 +166,8 @@ Options:
                 broker.Subscribe(IoTSdkLogger.EventSource, new IoTSdkLogger(logger));
                 var arguments = args.ToList();
                 arguments.Add($"--ec={cs}");
-                arguments.Add($"--si=0");
-                arguments.Add($"--ms=0");
                 if (acceptAll) {
                     arguments.Add("--aa");
-                }
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
-                    arguments.Add("--at=X509Store");
                 }
                 Publisher.Program.Main(arguments.ToArray());
                 Console.WriteLine("Publisher module exited.");
@@ -205,20 +204,31 @@ Options:
         private static async Task<ConnectionString> AddOrGetAsync(IIoTHubConfig config,
             string deviceId, string moduleId) {
             var logger = ConsoleLogger.Create(LogEventLevel.Error);
-            var registry = CreateClient(config, logger);
-            await registry.CreateAsync(new DeviceTwinModel {
-                Id = deviceId,
-                Tags = new Dictionary<string, JToken> {
-                    [TwinProperty.Type] = IdentityType.Gateway
-                },
-                Capabilities = new DeviceCapabilitiesModel {
-                    IotEdge = true
-                }
-            }, true, CancellationToken.None);
-            await registry.CreateAsync(new DeviceTwinModel {
-                Id = deviceId,
-                ModuleId = moduleId
-            }, true, CancellationToken.None);
+            var registry = new IoTHubServiceHttpClient(new HttpClient(logger),
+                config, new NewtonSoftJsonSerializer(), logger);
+            try {
+                await registry.CreateAsync(new DeviceTwinModel {
+                    Id = deviceId,
+                    Tags = new Dictionary<string, VariantValue> {
+                        [TwinProperty.Type] = IdentityType.Gateway
+                    },
+                    Capabilities = new DeviceCapabilitiesModel {
+                        IotEdge = true
+                    }
+                }, false, CancellationToken.None);
+            }
+            catch (ConflictingResourceException) {
+                logger.Information("Gateway {deviceId} exists.", deviceId);
+            }
+            try {
+                await registry.CreateAsync(new DeviceTwinModel {
+                    Id = deviceId,
+                    ModuleId = moduleId
+                }, false, CancellationToken.None);
+            }
+            catch (ConflictingResourceException) {
+                logger.Information("Module {moduleId} exists...", moduleId);
+            }
             var cs = await registry.GetConnectionStringAsync(deviceId, moduleId);
             return cs;
         }
@@ -229,7 +239,7 @@ Options:
         private static IoTHubServiceHttpClient CreateClient(IIoTHubConfig config,
             ILogger logger) {
             var registry = new IoTHubServiceHttpClient(new HttpClient(logger),
-                config, logger);
+                config, new NewtonSoftJsonSerializer(), logger);
             return registry;
         }
 
@@ -246,7 +256,7 @@ Options:
             public ServerWrapper(ILogger logger) {
                 _cts = new CancellationTokenSource();
                 _server = RunSampleServerAsync(_cts.Token, logger);
-                EndpointUrl = "opc.tcp://" + Opc.Ua.Utils.GetHostName() +
+                EndpointUrl = "opc.tcp://" + Dns.GetHostName() +
                     ":51210/UA/SampleServer";
             }
 

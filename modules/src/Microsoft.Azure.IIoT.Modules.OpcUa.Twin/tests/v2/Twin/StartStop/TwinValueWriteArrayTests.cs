@@ -11,7 +11,6 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Twin.v2.Twin.StartStop {
     using Microsoft.Azure.IIoT.OpcUa.Testing.Fixtures;
     using Microsoft.Azure.IIoT.OpcUa.Testing.Tests;
     using Microsoft.Azure.IIoT.OpcUa.Twin;
-    using System;
     using System.Net;
     using System.Threading.Tasks;
     using Xunit;
@@ -26,7 +25,7 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Twin.v2.Twin.StartStop {
 
         private EndpointModel Endpoint => new EndpointModel {
             Url = $"opc.tcp://{Dns.GetHostName()}:{_server.Port}/UA/SampleServer",
-            Certificate = _server.Certificate?.RawData
+            Certificate = _server.Certificate?.RawData?.ToThumbprint()
         };
 
         private WriteArrayValueTests<string> GetTests(EndpointRegistrationModel endpoint, IContainer services) {
@@ -36,7 +35,11 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Twin.v2.Twin.StartStop {
         }
 
         private readonly TestServerFixture _server;
-        private readonly bool _runAll = Environment.GetEnvironmentVariable("TEST_ALL") != null;
+#if TEST_ALL
+        private readonly bool _runAll = true;
+#else
+        private readonly bool _runAll = System.Environment.GetEnvironmentVariable("TEST_ALL") != null;
+#endif
 
         [SkippableFact]
         public async Task NodeWriteStaticArrayBooleanValueVariableTestAsync() {

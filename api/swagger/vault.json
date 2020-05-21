@@ -26,7 +26,10 @@
         "summary": "Get Issuer CA Certificate chain.",
         "operationId": "GetIssuerCertificateChain",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -45,13 +48,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "nextPageLink"
         }
@@ -65,7 +61,10 @@
         "summary": "Get Issuer CA CRL chain.",
         "operationId": "GetIssuerCrlChain",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -83,14 +82,7 @@
               "$ref": "#/definitions/X509CrlChainApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/issuer/{serialNumber}": {
@@ -165,10 +157,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -188,14 +184,7 @@
               "$ref": "#/definitions/StartSigningRequestResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/requests/sign/{requestId}": {
@@ -207,7 +196,10 @@
         "description": "Can be called in any state. After a successful fetch in 'Completed' state, the request is moved into 'Accepted' state. Requires Writer role.",
         "operationId": "FinishSigningRequest",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -225,14 +217,7 @@
               "$ref": "#/definitions/FinishSigningRequestResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/requests/keypair": {
@@ -247,10 +232,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -270,14 +259,7 @@
               "$ref": "#/definitions/StartNewKeyPairRequestResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/requests/keypair/{requestId}": {
@@ -289,7 +271,10 @@
         "description": "Can be called in any state. Fetches private key in 'Completed' state. After a successful fetch in 'Completed' state, the request is moved into 'Accepted' state. Requires Writer role.",
         "operationId": "FinishNewKeyPairRequest",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -307,14 +292,7 @@
               "$ref": "#/definitions/FinishNewKeyPairRequestResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/requests/{requestId}/approve": {
@@ -338,14 +316,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/requests/{requestId}/reject": {
@@ -369,14 +340,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/requests/{requestId}/accept": {
@@ -400,14 +364,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/requests/{requestId}": {
@@ -431,14 +388,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "get": {
         "tags": [
@@ -447,7 +397,10 @@
         "summary": "Get a specific certificate request.",
         "operationId": "GetRequest",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -465,14 +418,7 @@
               "$ref": "#/definitions/CertificateRequestRecordApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/requests/query": {
@@ -487,10 +433,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -516,14 +466,7 @@
               "$ref": "#/definitions/CertificateRequestQueryResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/requests": {
@@ -535,7 +478,10 @@
         "description": "Get all certificate requests in paged form or continue a current listing or query. The returned model can contain a link to the next page if more results are available.",
         "operationId": "ListRequests",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -560,13 +506,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "nextPageLink"
         }
@@ -581,7 +520,10 @@
         "description": "A trust group has a root certificate which issues certificates to entities. Entities can be part of a trust group and thus trust the root certificate and all entities that the root has issued certificates for.",
         "operationId": "ListGroups",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -606,13 +548,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "nextPageLink"
         }
@@ -628,10 +563,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -651,14 +590,7 @@
               "$ref": "#/definitions/TrustGroupRegistrationResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/groups/{groupId}": {
@@ -670,7 +602,10 @@
         "description": "A trust group has a root certificate which issues certificates to entities. Entities can be part of a trust group and thus trust the root certificate and all entities that the root has issued certificates for.",
         "operationId": "GetGroup",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -688,14 +623,7 @@
               "$ref": "#/definitions/TrustGroupRegistrationApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
@@ -708,7 +636,8 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -732,14 +661,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "delete": {
         "tags": [
@@ -761,14 +683,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/groups/root": {
@@ -783,10 +698,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -806,14 +725,7 @@
               "$ref": "#/definitions/TrustGroupRegistrationResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/groups/{groupId}/renew": {
@@ -836,14 +748,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/trustlists/{entityId}/{trustedEntityId}": {
@@ -874,14 +779,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/vault/v2/trustlists/{entityId}": {
@@ -893,7 +791,10 @@
         "description": "Returns all certificates the entity should trust based on the applied trust configuration.",
         "operationId": "ListTrustedCertificates",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -925,13 +826,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "nextPageLink"
         }
@@ -965,14 +859,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     }
   },
@@ -1003,9 +890,50 @@
           "description": "Not after validity",
           "type": "string"
         },
+        "selfSigned": {
+          "description": "Self signed",
+          "type": "boolean"
+        },
         "certificate": {
-          "description": "Raw data"
+          "format": "byte",
+          "description": "Raw data",
+          "type": "string"
         }
+      }
+    },
+    "X509ChainStatus": {
+      "description": "Status of x509 chain",
+      "enum": [
+        "NoError",
+        "NotTimeValid",
+        "Revoked",
+        "NotSignatureValid",
+        "NotValidForUsage",
+        "UntrustedRoot",
+        "RevocationStatusUnknown",
+        "Cyclic",
+        "InvalidExtension",
+        "InvalidPolicyConstraints",
+        "InvalidBasicConstraints",
+        "InvalidNameConstraints",
+        "HasNotSupportedNameConstraint",
+        "HasNotDefinedNameConstraint",
+        "HasNotPermittedNameConstraint",
+        "HasExcludedNameConstraint",
+        "PartialChain",
+        "CtlNotTimeValid",
+        "CtlNotSignatureValid",
+        "CtlNotValidForUsage",
+        "HasWeakSignature",
+        "OfflineRevocation",
+        "NoIssuanceChainPolicy",
+        "ExplicitDistrust",
+        "HasNotSupportedCriticalExtension"
+      ],
+      "type": "string",
+      "x-ms-enum": {
+        "name": "X509ChainStatus",
+        "modelAsString": false
       }
     },
     "X509CertificateChainApiModel": {
@@ -1017,6 +945,44 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/X509CertificateApiModel"
+          }
+        },
+        "status": {
+          "description": "Chain validation status if validated",
+          "enum": [
+            "NoError",
+            "NotTimeValid",
+            "Revoked",
+            "NotSignatureValid",
+            "NotValidForUsage",
+            "UntrustedRoot",
+            "RevocationStatusUnknown",
+            "Cyclic",
+            "InvalidExtension",
+            "InvalidPolicyConstraints",
+            "InvalidBasicConstraints",
+            "InvalidNameConstraints",
+            "HasNotSupportedNameConstraint",
+            "HasNotDefinedNameConstraint",
+            "HasNotPermittedNameConstraint",
+            "HasExcludedNameConstraint",
+            "PartialChain",
+            "CtlNotTimeValid",
+            "CtlNotSignatureValid",
+            "CtlNotValidForUsage",
+            "HasWeakSignature",
+            "OfflineRevocation",
+            "NoIssuanceChainPolicy",
+            "ExplicitDistrust",
+            "HasNotSupportedCriticalExtension"
+          ],
+          "type": "string",
+          "items": {
+            "$ref": "#/definitions/X509ChainStatus"
+          },
+          "x-ms-enum": {
+            "name": "X509ChainStatus",
+            "modelAsString": false
           }
         }
       }
@@ -1050,10 +1016,9 @@
     "NotFoundResult": {
       "type": "object",
       "properties": {
-        "statusCode": {
+        "StatusCode": {
           "format": "int32",
-          "type": "integer",
-          "readOnly": true
+          "type": "integer"
         }
       }
     },
@@ -1576,14 +1541,11 @@
     }
   },
   "securityDefinitions": {
-    "oauth2": {
-      "type": "oauth2",
-      "flow": "implicit",
-      "authorizationUrl": "https://login.microsoftonline.com/6e660ce4-d51a-4585-80c6-58035e212354/oauth2/authorize",
-      "scopes": {
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication": "Access http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication operations"
-      },
-      "description": "Implicit oauth2 token flow."
+    "bearer": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "Authorization token in the form of 'bearer <token>'"
     }
   },
   "tags": [
@@ -1593,7 +1555,7 @@
     },
     {
       "name": "Distribution",
-      "description": "Certificate CRL Distribution Point and Authority\r\nInformation Access\r\nservices."
+      "description": "Certificate CRL Distribution Point and Authority Information Access services."
     },
     {
       "name": "Requests",

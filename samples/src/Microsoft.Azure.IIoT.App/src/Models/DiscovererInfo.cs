@@ -36,6 +36,16 @@ namespace Microsoft.Azure.IIoT.App.Services {
         /// </summary>
         public bool HasApplication { get; set; }
 
+        /// <summary>
+        /// is Ad-Hoc Discovery.
+        /// </summary>
+        public bool isAdHocDiscovery { get; set; } = false;
+
+        /// <summary>
+        /// Id of discovery request
+        /// </summary>
+        public string DiscoveryRequestId { get; set; }
+
         // Bind Proxies
 
         /// <summary>
@@ -121,7 +131,10 @@ namespace Microsoft.Azure.IIoT.App.Services {
                 == TimeSpan.MinValue ?
                 null : DiscovererModel.RequestedConfig.NetworkProbeTimeout.ToString();
             set {
-                Patch.NetworkProbeTimeout =
+                if (DiscovererModel.RequestedConfig == null) {
+                    DiscovererModel.RequestedConfig = new DiscoveryConfigApiModel();
+                }
+                Patch.NetworkProbeTimeout = DiscovererModel.RequestedConfig.NetworkProbeTimeout =
                     string.IsNullOrWhiteSpace(value) ? TimeSpan.MinValue :
                     TimeSpan.Parse(value);
             }
@@ -134,7 +147,10 @@ namespace Microsoft.Azure.IIoT.App.Services {
             get => (DiscovererModel.RequestedConfig?.MaxNetworkProbes ?? -1) < 0 ?
                 null : DiscovererModel.RequestedConfig.MaxNetworkProbes.ToString();
             set {
-                Patch.MaxNetworkProbes =
+                if (DiscovererModel.RequestedConfig == null) {
+                    DiscovererModel.RequestedConfig = new DiscoveryConfigApiModel();
+                }
+                Patch.MaxNetworkProbes = DiscovererModel.RequestedConfig.MaxNetworkProbes =
                     string.IsNullOrWhiteSpace(value) ? -1 : int.Parse(value);
             }
         }
@@ -147,7 +163,10 @@ namespace Microsoft.Azure.IIoT.App.Services {
                 == TimeSpan.MinValue ?
                 null : DiscovererModel.RequestedConfig.PortProbeTimeout.ToString();
             set {
-                Patch.PortProbeTimeout =
+                if (DiscovererModel.RequestedConfig == null) {
+                    DiscovererModel.RequestedConfig = new DiscoveryConfigApiModel();
+                }
+                Patch.PortProbeTimeout = DiscovererModel.RequestedConfig.PortProbeTimeout =
                     string.IsNullOrWhiteSpace(value) ? TimeSpan.MinValue :
                     TimeSpan.Parse(value);
             }
@@ -160,7 +179,10 @@ namespace Microsoft.Azure.IIoT.App.Services {
             get => (DiscovererModel.RequestedConfig?.MaxPortProbes ?? -1) < 0 ?
                 null : DiscovererModel.RequestedConfig.MaxPortProbes.ToString();
             set {
-                Patch.MaxPortProbes =
+                if (DiscovererModel.RequestedConfig == null) {
+                    DiscovererModel.RequestedConfig = new DiscoveryConfigApiModel();
+                }
+                Patch.MaxPortProbes = DiscovererModel.RequestedConfig.MaxPortProbes =
                     string.IsNullOrWhiteSpace(value) ? -1 : int.Parse(value);
             }
         }
@@ -173,7 +195,10 @@ namespace Microsoft.Azure.IIoT.App.Services {
                 == TimeSpan.MinValue ?
                 null : DiscovererModel.RequestedConfig.IdleTimeBetweenScans.ToString();
             set {
-                Patch.IdleTimeBetweenScans =
+                if (DiscovererModel.RequestedConfig == null) {
+                    DiscovererModel.RequestedConfig = new DiscoveryConfigApiModel();
+                }
+                Patch.IdleTimeBetweenScans = DiscovererModel.RequestedConfig.IdleTimeBetweenScans =
                     string.IsNullOrWhiteSpace(value) ? TimeSpan.MinValue :
                     TimeSpan.Parse(value);
             }
@@ -186,7 +211,10 @@ namespace Microsoft.Azure.IIoT.App.Services {
             get => string.IsNullOrEmpty(DiscovererModel.RequestedConfig?.AddressRangesToScan) ?
                 null : DiscovererModel.RequestedConfig.AddressRangesToScan;
             set {
-                Patch.AddressRangesToScan =
+                if (DiscovererModel.RequestedConfig == null) {
+                    DiscovererModel.RequestedConfig = new DiscoveryConfigApiModel();
+                }
+                Patch.AddressRangesToScan = DiscovererModel.RequestedConfig.AddressRangesToScan =
                     string.IsNullOrWhiteSpace(value) ? string.Empty : value;
             }
         }
@@ -198,7 +226,10 @@ namespace Microsoft.Azure.IIoT.App.Services {
             get => string.IsNullOrEmpty(DiscovererModel.RequestedConfig?.PortRangesToScan) ?
                 null : DiscovererModel.RequestedConfig.PortRangesToScan;
             set {
-                Patch.PortRangesToScan =
+                if (DiscovererModel.RequestedConfig == null) {
+                    DiscovererModel.RequestedConfig = new DiscoveryConfigApiModel();
+                }
+                Patch.PortRangesToScan = DiscovererModel.RequestedConfig.PortRangesToScan =
                     string.IsNullOrWhiteSpace(value) ? string.Empty : value;
             }
         }
@@ -227,6 +258,7 @@ namespace Microsoft.Azure.IIoT.App.Services {
             }
             Patch.DiscoveryUrls.Add(url);
             RequestedDiscoveryUrls = Patch.DiscoveryUrls;
+            DiscovererModel.RequestedConfig.DiscoveryUrls = Patch.DiscoveryUrls;
         }
 
         /// <summary>
@@ -239,6 +271,7 @@ namespace Microsoft.Azure.IIoT.App.Services {
             }
             Patch.DiscoveryUrls.Remove(url);
             RequestedDiscoveryUrls = Patch.DiscoveryUrls;
+            DiscovererModel.RequestedConfig.DiscoveryUrls = Patch.DiscoveryUrls;
         }
 
         /// <summary>

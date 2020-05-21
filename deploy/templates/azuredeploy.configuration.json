@@ -30,9 +30,7 @@
             "properties": {
                 "contentType": "application/json",
                 "value": "[string(parameters('configuration')[copyIndex()].value)]"
-            },
-            "dependsOn": [
-            ]
+            }
         }
     ]
 }

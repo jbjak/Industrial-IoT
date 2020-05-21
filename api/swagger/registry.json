@@ -30,7 +30,8 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -47,14 +48,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "put": {
         "tags": [
@@ -67,10 +61,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -90,14 +88,7 @@
               "$ref": "#/definitions/ApplicationRegistrationResponseApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "delete": {
         "tags": [
@@ -119,14 +110,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "get": {
         "tags": [
@@ -136,7 +120,10 @@
         "description": "Get all registered applications in paged form. The returned model can contain a continuation token if more results are available. Call this operation again using the token to retrieve more results.",
         "operationId": "GetListOfApplications",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -161,13 +148,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "continuationToken"
         }
@@ -194,14 +174,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/applications/{applicationId}/enable": {
@@ -225,14 +198,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/applications/discover": {
@@ -247,7 +213,8 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -264,14 +231,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/applications/discover/{requestId}": {
@@ -295,14 +255,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/applications/{applicationId}": {
@@ -313,7 +266,10 @@
         "summary": "Get application registration",
         "operationId": "GetApplicationRegistration",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -331,14 +287,7 @@
               "$ref": "#/definitions/ApplicationRegistrationApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "patch": {
         "tags": [
@@ -351,7 +300,8 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -375,14 +325,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "delete": {
         "tags": [
@@ -404,14 +347,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/applications/sites": {
@@ -423,7 +359,10 @@
         "description": "List all sites applications are registered in.",
         "operationId": "GetListOfSites",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -448,13 +387,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "continuationToken"
         }
@@ -472,10 +404,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -502,14 +438,7 @@
               "$ref": "#/definitions/ApplicationInfoListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "get": {
         "tags": [
@@ -522,10 +451,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -552,96 +485,22 @@
               "$ref": "#/definitions/ApplicationInfoListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/applications/events": {
-      "put": {
-        "tags": [
-          "Applications"
-        ],
-        "summary": "Subscribe for application events",
-        "description": "Register a client to receive application events through SignalR.",
-        "operationId": "Subscribe",
-        "consumes": [
-          "application/json-patch+json",
-          "application/json",
-          "text/json",
-          "application/*+json"
-        ],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "description": "The user that will receive application events.",
-            "schema": {
-              "description": "The user that will receive application\r\n            events.",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/applications/events/{userId}": {
-      "delete": {
-        "tags": [
-          "Applications"
-        ],
-        "summary": "Unsubscribe from application events",
-        "description": "Unregister a user and stop it from receiving events.",
-        "operationId": "Unsubscribe",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "userId",
-            "description": "The user id that will not receive any more events",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/discovery/{discovererId}": {
       "get": {
         "tags": [
-          "Discoverers"
+          "Discovery"
         ],
         "summary": "Get discoverer registration information",
         "description": "Returns a discoverer's registration and connectivity information. A discoverer id corresponds to the twin modules module identity.",
         "operationId": "GetDiscoverer",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -650,12 +509,6 @@
             "description": "Discoverer identifier",
             "required": true,
             "type": "string"
-          },
-          {
-            "in": "query",
-            "name": "onlyServerState",
-            "description": "Whether to include only server state, or display current client state of the endpoint if available",
-            "type": "boolean"
           }
         ],
         "responses": {
@@ -665,18 +518,11 @@
               "$ref": "#/definitions/DiscovererApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "patch": {
         "tags": [
-          "Discoverers"
+          "Discovery"
         ],
         "summary": "Update discoverer information",
         "description": "Allows a caller to configure recurring discovery runs on the twin module identified by the discoverer id or update site information.",
@@ -685,7 +531,8 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -709,18 +556,11 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
-          "Discoverers"
+          "Discovery"
         ],
         "summary": "Enable server discovery",
         "description": "Allows a caller to configure recurring discovery runs on the discovery module identified by the module id.",
@@ -729,7 +569,8 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -770,34 +611,24 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/discovery": {
       "get": {
         "tags": [
-          "Discoverers"
+          "Discovery"
         ],
         "summary": "Get list of discoverers",
         "description": "Get all registered discoverers and therefore twin modules in paged form. The returned model can contain a continuation token if more results are available. Call this operation again using the token to retrieve more results.",
         "operationId": "GetListOfDiscoverers",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
-          {
-            "in": "query",
-            "name": "onlyServerState",
-            "description": "Whether to include only server state, or display current client state of the endpoint if available",
-            "type": "boolean"
-          },
           {
             "in": "query",
             "name": "continuationToken",
@@ -820,13 +651,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "continuationToken"
         }
@@ -835,7 +659,7 @@
     "/registry/v2/discovery/query": {
       "post": {
         "tags": [
-          "Discoverers"
+          "Discovery"
         ],
         "summary": "Query discoverers",
         "description": "Get all discoverers that match a specified query. The returned model can contain a continuation token if more results are available. Call the GetListOfDiscoverers operation using the token to retrieve more results.",
@@ -844,18 +668,16 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
-          {
-            "in": "query",
-            "name": "onlyServerState",
-            "description": "Whether to include only server state, or display current client state of the endpoint if available",
-            "type": "boolean"
-          },
           {
             "in": "query",
             "name": "pageSize",
@@ -880,24 +702,20 @@
               "$ref": "#/definitions/DiscovererListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "get": {
         "tags": [
-          "Discoverers"
+          "Discovery"
         ],
         "summary": "Get filtered list of discoverers",
         "description": "Get a list of discoverers filtered using the specified query parameters. The returned model can contain a continuation token if more results are available. Call the GetListOfDiscoverers operation using the token to retrieve more results.",
         "operationId": "GetFilteredListOfDiscoverers",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -931,12 +749,6 @@
           },
           {
             "in": "query",
-            "name": "onlyServerState",
-            "description": "Whether to include only server state, or display current client state of the endpoint if available",
-            "type": "boolean"
-          },
-          {
-            "in": "query",
             "name": "pageSize",
             "description": "Number of results to return",
             "type": "integer",
@@ -950,252 +762,40 @@
               "$ref": "#/definitions/DiscovererListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
-    "/registry/v2/discovery/events": {
-      "put": {
+    "/registry/v2/endpoints/{endpointId}/certificate": {
+      "get": {
         "tags": [
-          "Discoverers"
+          "Endpoints"
         ],
-        "summary": "Subscribe to discoverer registry events",
-        "description": "Register a user to receive discoverer events through SignalR.",
-        "operationId": "Subscribe",
-        "consumes": [
-          "application/json-patch+json",
+        "summary": "Get endpoint certificate chain",
+        "description": "Gets current certificate of the endpoint.",
+        "operationId": "GetEndpointCertificate",
+        "produces": [
+          "text/plain",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/x-msgpack"
         ],
         "parameters": [
           {
-            "in": "body",
-            "name": "body",
-            "description": "The user id that will receive discoverer events.",
+            "in": "path",
+            "name": "endpointId",
+            "description": "endpoint identifier",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
             "schema": {
-              "description": "The user id that will receive discoverer\r\n            events.",
-              "type": "string"
+              "$ref": "#/definitions/X509CertificateChainApiModel"
             }
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/discovery/events/{userId}": {
-      "delete": {
-        "tags": [
-          "Discoverers"
-        ],
-        "summary": "Unsubscribe registry events",
-        "description": "Unregister a user and stop it from receiving discoverer events.",
-        "operationId": "Unsubscribe",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "userId",
-            "description": "The user id that will not receive any more discoverer events",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/discovery/{discovererId}/events": {
-      "put": {
-        "tags": [
-          "Discoverers"
-        ],
-        "summary": "Subscribe to discovery progress from discoverer",
-        "description": "Register a client to receive discovery progress events through SignalR from a particular discoverer.",
-        "operationId": "SubscribeByDiscovererId",
-        "consumes": [
-          "application/json-patch+json",
-          "application/json",
-          "text/json",
-          "application/*+json"
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "discovererId",
-            "description": "The discoverer to subscribe to",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "description": "The user id that will receive discovery events.",
-            "schema": {
-              "description": "The user id that will receive discovery\r\n            events.",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/discovery/requests/{requestId}/events": {
-      "put": {
-        "tags": [
-          "Discoverers"
-        ],
-        "summary": "Subscribe to discovery progress for a request",
-        "description": "Register a client to receive discovery progress events through SignalR for a particular request.",
-        "operationId": "SubscribeByRequestId",
-        "consumes": [
-          "application/json-patch+json",
-          "application/json",
-          "text/json",
-          "application/*+json"
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "requestId",
-            "description": "The request to monitor",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "description": "The user id that will receive discovery events.",
-            "schema": {
-              "description": "The user id that will receive discovery\r\n            events.",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/discovery/requests/{requestId}/events/{userId}": {
-      "delete": {
-        "tags": [
-          "Discoverers"
-        ],
-        "summary": "Unsubscribe from discovery progress for a request.",
-        "description": "Unregister a client and stop it from receiving discovery events for a particular request.",
-        "operationId": "UnsubscribeByRequestId",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "requestId",
-            "description": "The request to unsubscribe from",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "in": "path",
-            "name": "userId",
-            "description": "The user id that will not receive any more discovery progress",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/discovery/{discovererId}/events/{userId}": {
-      "delete": {
-        "tags": [
-          "Discoverers"
-        ],
-        "summary": "Unsubscribe from discovery progress from discoverer.",
-        "description": "Unregister a client and stop it from receiving discovery events.",
-        "operationId": "UnsubscribeByDiscovererId",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "discovererId",
-            "description": "The discoverer to unsubscribe from",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "in": "path",
-            "name": "userId",
-            "description": "The user id that will not receive any more discovery progress",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/endpoints/{endpointId}/activate": {
@@ -1219,14 +819,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/endpoints/{endpointId}": {
@@ -1238,7 +831,10 @@
         "description": "Gets information about an endpoint.",
         "operationId": "GetEndpoint",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -1262,14 +858,7 @@
               "$ref": "#/definitions/EndpointInfoApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/endpoints": {
@@ -1281,7 +870,10 @@
         "description": "Get all registered endpoints in paged form. The returned model can contain a continuation token if more results are available. Call this operation again using the token to retrieve more results.",
         "operationId": "GetListOfEndpoints",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -1312,13 +904,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "continuationToken"
         }
@@ -1336,10 +921,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -1372,14 +961,7 @@
               "$ref": "#/definitions/EndpointInfoListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "get": {
         "tags": [
@@ -1389,7 +971,10 @@
         "description": "Get a list of endpoints filtered using the specified query parameters. The returned model can contain a continuation token if more results are available. Call the GetListOfEndpoints operation using the token to retrieve more results.",
         "operationId": "GetFilteredListOfEndpoints",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -1401,9 +986,8 @@
           {
             "in": "query",
             "name": "certificate",
-            "description": "Certificate of the endpoint",
-            "type": "string",
-            "format": "byte"
+            "description": "Endpoint certificate thumbprint",
+            "type": "string"
           },
           {
             "in": "query",
@@ -1451,7 +1035,9 @@
               "NoTrust",
               "CertificateInvalid",
               "Ready",
-              "Error"
+              "Error",
+              "Disconnected",
+              "Unauthorized"
             ],
             "x-ms-enum": {
               "name": "EndpointConnectivityState",
@@ -1509,14 +1095,7 @@
               "$ref": "#/definitions/EndpointInfoListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/endpoints/{endpointId}/deactivate": {
@@ -1540,84 +1119,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/endpoints/events": {
-      "put": {
-        "tags": [
-          "Endpoints"
-        ],
-        "summary": "Subscribe for endpoint events",
-        "description": "Register a user to receive endpoint events through SignalR.",
-        "operationId": "Subscribe",
-        "consumes": [
-          "application/json-patch+json",
-          "application/json",
-          "text/json",
-          "application/*+json"
-        ],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "description": "The user id that will receive endpoint events.",
-            "schema": {
-              "description": "The user id that will receive endpoint\r\n            events.",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/endpoints/events/{userId}": {
-      "delete": {
-        "tags": [
-          "Endpoints"
-        ],
-        "summary": "Unsubscribe from endpoint events",
-        "description": "Unregister a user and stop it from receiving endpoint events.",
-        "operationId": "Unsubscribe",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "userId",
-            "description": "The user id that will not receive any more endpoint events",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/gateways/{GatewayId}": {
@@ -1629,7 +1131,10 @@
         "description": "Returns a Gateway's registration and connectivity information. A Gateway id corresponds to the twin modules module identity.",
         "operationId": "GetGateway",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -1647,14 +1152,7 @@
               "$ref": "#/definitions/GatewayInfoApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "patch": {
         "tags": [
@@ -1667,7 +1165,8 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -1691,14 +1190,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/gateways": {
@@ -1710,7 +1202,10 @@
         "description": "Get all registered Gateways and therefore twin modules in paged form. The returned model can contain a continuation token if more results are available. Call this operation again using the token to retrieve more results.",
         "operationId": "GetListOfGateway",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -1735,13 +1230,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "continuationToken"
         }
@@ -1759,10 +1247,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -1789,14 +1281,7 @@
               "$ref": "#/definitions/GatewayListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "get": {
         "tags": [
@@ -1806,7 +1291,10 @@
         "description": "Get a list of Gateways filtered using the specified query parameters. The returned model can contain a continuation token if more results are available. Call the GetListOfGateway operation using the token to retrieve more results.",
         "operationId": "GetFilteredListOfGateway",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -1836,84 +1324,7 @@
               "$ref": "#/definitions/GatewayListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/gateways/events": {
-      "put": {
-        "tags": [
-          "Gateways"
-        ],
-        "summary": "Subscribe to Gateway registry events",
-        "description": "Register a user to receive Gateway events through SignalR.",
-        "operationId": "Subscribe",
-        "consumes": [
-          "application/json-patch+json",
-          "application/json",
-          "text/json",
-          "application/*+json"
-        ],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "description": "The user id that will receive Gateway events.",
-            "schema": {
-              "description": "The user id that will receive Gateway\r\n            events.",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/gateways/events/{userId}": {
-      "delete": {
-        "tags": [
-          "Gateways"
-        ],
-        "summary": "Unsubscribe registry events",
-        "description": "Unregister a user and stop it from receiving Gateway events.",
-        "operationId": "Unsubscribe",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "userId",
-            "description": "The user id that will not receive any more Gateway events",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/publishers/{publisherId}": {
@@ -1925,7 +1336,10 @@
         "description": "Returns a publisher's registration and connectivity information. A publisher id corresponds to the twin modules module identity.",
         "operationId": "GetPublisher",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -1949,14 +1363,7 @@
               "$ref": "#/definitions/PublisherApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "patch": {
         "tags": [
@@ -1969,7 +1376,8 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -1993,14 +1401,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/publishers": {
@@ -2012,7 +1413,10 @@
         "description": "Get all registered publishers and therefore twin modules in paged form. The returned model can contain a continuation token if more results are available. Call this operation again using the token to retrieve more results.",
         "operationId": "GetListOfPublisher",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -2043,13 +1447,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "continuationToken"
         }
@@ -2067,10 +1464,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -2103,14 +1504,7 @@
               "$ref": "#/definitions/PublisherListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "get": {
         "tags": [
@@ -2120,7 +1514,10 @@
         "description": "Get a list of publishers filtered using the specified query parameters. The returned model can contain a continuation token if more results are available. Call the GetListOfPublisher operation using the token to retrieve more results.",
         "operationId": "GetFilteredListOfPublisher",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -2156,84 +1553,7 @@
               "$ref": "#/definitions/PublisherListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/publishers/events": {
-      "put": {
-        "tags": [
-          "Publishers"
-        ],
-        "summary": "Subscribe to publisher registry events",
-        "description": "Register a user to receive publisher events through SignalR.",
-        "operationId": "Subscribe",
-        "consumes": [
-          "application/json-patch+json",
-          "application/json",
-          "text/json",
-          "application/*+json"
-        ],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "description": "The user id that will receive publisher events.",
-            "schema": {
-              "description": "The user id that will receive publisher\r\n            events.",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/publishers/events/{userId}": {
-      "delete": {
-        "tags": [
-          "Publishers"
-        ],
-        "summary": "Unsubscribe registry events",
-        "description": "Unregister a user and stop it from receiving publisher events.",
-        "operationId": "Unsubscribe",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "userId",
-            "description": "The user id that will not receive any more publisher events",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/supervisors/{supervisorId}": {
@@ -2245,7 +1565,10 @@
         "description": "Returns a supervisor's registration and connectivity information. A supervisor id corresponds to the twin modules module identity.",
         "operationId": "GetSupervisor",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -2269,14 +1592,7 @@
               "$ref": "#/definitions/SupervisorApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "patch": {
         "tags": [
@@ -2289,7 +1605,8 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -2313,14 +1630,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/supervisors/{supervisorId}/status": {
@@ -2332,7 +1642,10 @@
         "description": "Allows a caller to get runtime status for a supervisor.",
         "operationId": "GetSupervisorStatus",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -2350,14 +1663,7 @@
               "$ref": "#/definitions/SupervisorStatusApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/supervisors/{supervisorId}/reset": {
@@ -2381,14 +1687,7 @@
           "200": {
             "description": "Success"
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     },
     "/registry/v2/supervisors": {
@@ -2400,7 +1699,10 @@
         "description": "Get all registered supervisors and therefore twin modules in paged form. The returned model can contain a continuation token if more results are available. Call this operation again using the token to retrieve more results.",
         "operationId": "GetListOfSupervisors",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -2431,13 +1733,6 @@
             }
           }
         },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ],
         "x-ms-pageable": {
           "nextLinkName": "continuationToken"
         }
@@ -2455,10 +1750,14 @@
           "application/json-patch+json",
           "application/json",
           "text/json",
-          "application/*+json"
+          "application/*+json",
+          "application/x-msgpack"
         ],
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
@@ -2491,14 +1790,7 @@
               "$ref": "#/definitions/SupervisorListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       },
       "get": {
         "tags": [
@@ -2508,13 +1800,22 @@
         "description": "Get a list of supervisors filtered using the specified query parameters. The returned model can contain a continuation token if more results are available. Call the GetListOfSupervisors operation using the token to retrieve more results.",
         "operationId": "GetFilteredListOfSupervisors",
         "produces": [
-          "application/json"
+          "text/plain",
+          "application/json",
+          "text/json",
+          "application/x-msgpack"
         ],
         "parameters": [
           {
             "in": "query",
             "name": "siteId",
             "description": "Site for the supervisors",
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "endpointId",
+            "description": "Managing provided endpoint twin",
             "type": "string"
           },
           {
@@ -2544,84 +1845,7 @@
               "$ref": "#/definitions/SupervisorListApiModel"
             }
           }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/supervisors/events": {
-      "put": {
-        "tags": [
-          "Supervisors"
-        ],
-        "summary": "Subscribe to supervisor registry events",
-        "description": "Register a user to receive supervisor events through SignalR.",
-        "operationId": "Subscribe",
-        "consumes": [
-          "application/json-patch+json",
-          "application/json",
-          "text/json",
-          "application/*+json"
-        ],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "description": "The user id that will receive supervisor events.",
-            "schema": {
-              "description": "The user id that will receive supervisor\r\n            events.",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
-      }
-    },
-    "/registry/v2/supervisors/events/{userId}": {
-      "delete": {
-        "tags": [
-          "Supervisors"
-        ],
-        "summary": "Unsubscribe registry events",
-        "description": "Unregister a user and stop it from receiving supervisor events.",
-        "operationId": "Unsubscribe",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "userId",
-            "description": "The user id that will not receive any more supervisor events",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "oauth2": [
-              "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication"
-            ]
-          }
-        ]
+        }
       }
     }
   },
@@ -2824,11 +2048,6 @@
             "type": "string"
           }
         },
-        "certificate": {
-          "format": "byte",
-          "description": "Application public cert",
-          "type": "string"
-        },
         "capabilities": {
           "description": "The capabilities advertised by the server.",
           "uniqueItems": true,
@@ -2923,10 +2142,10 @@
           "description": "Address ranges to scan (null == all wired nics)",
           "type": "string"
         },
-        "networkProbeTimeoutMs": {
-          "format": "int32",
+        "networkProbeTimeout": {
+          "format": "date-span",
           "description": "Network probe timeout",
-          "type": "integer"
+          "type": "string"
         },
         "maxNetworkProbes": {
           "format": "int32",
@@ -2937,10 +2156,10 @@
           "description": "Port ranges to scan (null == all unassigned)",
           "type": "string"
         },
-        "portProbeTimeoutMs": {
-          "format": "int32",
+        "portProbeTimeout": {
+          "format": "date-span",
           "description": "Port probe timeout",
-          "type": "integer"
+          "type": "string"
         },
         "maxPortProbes": {
           "format": "int32",
@@ -2952,10 +2171,10 @@
           "description": "Probes that must always be there as percent of max.",
           "type": "integer"
         },
-        "idleTimeBetweenScansSec": {
-          "format": "int32",
-          "description": "Delay time between discovery sweeps in seconds",
-          "type": "integer"
+        "idleTimeBetweenScans": {
+          "format": "date-span",
+          "description": "Delay time between discovery sweeps",
+          "type": "string"
         },
         "discoveryUrls": {
           "description": "List of preset discovery urls to use",
@@ -2994,9 +2213,6 @@
     },
     "EndpointApiModel": {
       "description": "Endpoint model",
-      "required": [
-        "url"
-      ],
       "type": "object",
       "properties": {
         "url": {
@@ -3015,18 +2231,17 @@
           "$ref": "#/definitions/SecurityMode"
         },
         "securityPolicy": {
-          "description": "Security policy uri to use for communication\r\ndefault to best.",
+          "description": "Security policy uri to use for communication.\r\ndefault to best.",
           "type": "string"
         },
         "certificate": {
-          "format": "byte",
-          "description": "Endpoint certificate that was registered.",
+          "description": "Endpoint certificate thumbprint",
           "type": "string"
         }
       }
     },
     "CredentialType": {
-      "description": "Type of credential to use for serverauth",
+      "description": "Type of credentials to use for authentication",
       "enum": [
         "None",
         "UserName",
@@ -3065,7 +2280,6 @@
     "EndpointRegistrationApiModel": {
       "description": "Endpoint registration model",
       "required": [
-        "endpoint",
         "id"
       ],
       "type": "object",
@@ -3083,7 +2297,7 @@
           "type": "string"
         },
         "supervisorId": {
-          "description": "Supervisor that manages the endpoint.",
+          "description": "Supervisor that can manage the endpoint.",
           "type": "string"
         },
         "discovererId": {
@@ -3107,19 +2321,6 @@
         }
       }
     },
-    "SecurityAssessment": {
-      "description": "Security assessment of the endpoint or application",
-      "enum": [
-        "Low",
-        "Medium",
-        "High"
-      ],
-      "type": "string",
-      "x-ms-enum": {
-        "name": "SecurityAssessment",
-        "modelAsString": false
-      }
-    },
     "ApplicationRegistrationApiModel": {
       "description": "Application with optional list of endpoints",
       "required": [
@@ -3136,9 +2337,6 @@
           "items": {
             "$ref": "#/definitions/EndpointRegistrationApiModel"
           }
-        },
-        "securityAssessment": {
-          "$ref": "#/definitions/SecurityAssessment"
         }
       }
     },
@@ -3164,11 +2362,6 @@
           "additionalProperties": {
             "type": "string"
           }
-        },
-        "certificate": {
-          "format": "byte",
-          "description": "Application public cert",
-          "type": "string"
         },
         "capabilities": {
           "description": "Capabilities of the application",
@@ -3297,6 +2490,12 @@
         "discoveryConfig": {
           "$ref": "#/definitions/DiscoveryConfigApiModel"
         },
+        "requestedMode": {
+          "$ref": "#/definitions/DiscoveryMode"
+        },
+        "requestedConfig": {
+          "$ref": "#/definitions/DiscoveryConfigApiModel"
+        },
         "logLevel": {
           "$ref": "#/definitions/TraceLogLevel"
         },
@@ -3363,6 +2562,129 @@
         }
       }
     },
+    "X509CertificateApiModel": {
+      "description": "Certificate model",
+      "type": "object",
+      "properties": {
+        "subject": {
+          "description": "Subject",
+          "type": "string"
+        },
+        "thumbprint": {
+          "description": "Thumbprint",
+          "type": "string"
+        },
+        "serialNumber": {
+          "description": "Serial number",
+          "type": "string"
+        },
+        "notBeforeUtc": {
+          "format": "date-time",
+          "description": "Not before validity",
+          "type": "string"
+        },
+        "notAfterUtc": {
+          "format": "date-time",
+          "description": "Not after validity",
+          "type": "string"
+        },
+        "selfSigned": {
+          "description": "Self signed",
+          "type": "boolean"
+        },
+        "certificate": {
+          "format": "byte",
+          "description": "Raw data",
+          "type": "string"
+        }
+      }
+    },
+    "X509ChainStatus": {
+      "description": "Status of x509 chain",
+      "enum": [
+        "NoError",
+        "NotTimeValid",
+        "Revoked",
+        "NotSignatureValid",
+        "NotValidForUsage",
+        "UntrustedRoot",
+        "RevocationStatusUnknown",
+        "Cyclic",
+        "InvalidExtension",
+        "InvalidPolicyConstraints",
+        "InvalidBasicConstraints",
+        "InvalidNameConstraints",
+        "HasNotSupportedNameConstraint",
+        "HasNotDefinedNameConstraint",
+        "HasNotPermittedNameConstraint",
+        "HasExcludedNameConstraint",
+        "PartialChain",
+        "CtlNotTimeValid",
+        "CtlNotSignatureValid",
+        "CtlNotValidForUsage",
+        "HasWeakSignature",
+        "OfflineRevocation",
+        "NoIssuanceChainPolicy",
+        "ExplicitDistrust",
+        "HasNotSupportedCriticalExtension"
+      ],
+      "type": "string",
+      "x-ms-enum": {
+        "name": "X509ChainStatus",
+        "modelAsString": false
+      }
+    },
+    "X509CertificateChainApiModel": {
+      "description": "Certificate chain",
+      "type": "object",
+      "properties": {
+        "chain": {
+          "description": "Chain",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/X509CertificateApiModel"
+          }
+        },
+        "status": {
+          "description": "Chain validation status if validated",
+          "enum": [
+            "NoError",
+            "NotTimeValid",
+            "Revoked",
+            "NotSignatureValid",
+            "NotValidForUsage",
+            "UntrustedRoot",
+            "RevocationStatusUnknown",
+            "Cyclic",
+            "InvalidExtension",
+            "InvalidPolicyConstraints",
+            "InvalidBasicConstraints",
+            "InvalidNameConstraints",
+            "HasNotSupportedNameConstraint",
+            "HasNotDefinedNameConstraint",
+            "HasNotPermittedNameConstraint",
+            "HasExcludedNameConstraint",
+            "PartialChain",
+            "CtlNotTimeValid",
+            "CtlNotSignatureValid",
+            "CtlNotValidForUsage",
+            "HasWeakSignature",
+            "OfflineRevocation",
+            "NoIssuanceChainPolicy",
+            "ExplicitDistrust",
+            "HasNotSupportedCriticalExtension"
+          ],
+          "type": "string",
+          "items": {
+            "$ref": "#/definitions/X509ChainStatus"
+          },
+          "x-ms-enum": {
+            "name": "X509ChainStatus",
+            "modelAsString": false
+          }
+        }
+      }
+    },
     "EndpointActivationState": {
       "description": "Activation state of the endpoint twin",
       "enum": [
@@ -3385,7 +2707,9 @@
         "NoTrust",
         "CertificateInvalid",
         "Ready",
-        "Error"
+        "Error",
+        "Disconnected",
+        "Unauthorized"
       ],
       "type": "string",
       "x-ms-enum": {
@@ -3451,8 +2775,7 @@
           "type": "string"
         },
         "certificate": {
-          "format": "byte",
-          "description": "Certificate of the endpoint",
+          "description": "Endpoint certificate thumbprint",
           "type": "string"
         },
         "securityMode": {
@@ -3531,11 +2854,6 @@
           "description": "Site of the supervisor",
           "type": "string"
         },
-        "certificate": {
-          "format": "byte",
-          "description": "Supervisor public client cert",
-          "type": "string"
-        },
         "logLevel": {
           "$ref": "#/definitions/TraceLogLevel"
         },
@@ -3594,11 +2912,6 @@
         },
         "siteId": {
           "description": "Site of the publisher",
-          "type": "string"
-        },
-        "certificate": {
-          "format": "byte",
-          "description": "Publisher public client cert",
           "type": "string"
         },
         "logLevel": {
@@ -3817,6 +3130,10 @@
           "description": "Site for the supervisors",
           "type": "string"
         },
+        "endpointId": {
+          "description": "Managing provided endpoint twin",
+          "type": "string"
+        },
         "connected": {
           "description": "Included connected or disconnected",
           "type": "boolean"
@@ -3825,14 +3142,11 @@
     }
   },
   "securityDefinitions": {
-    "oauth2": {
-      "type": "oauth2",
-      "flow": "implicit",
-      "authorizationUrl": "https://login.microsoftonline.com/6e660ce4-d51a-4585-80c6-58035e212354/oauth2/authorize",
-      "scopes": {
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication": "Access http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication operations"
-      },
-      "description": "Implicit oauth2 token flow."
+    "bearer": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "Authorization token in the form of 'bearer <token>'"
     }
   },
   "tags": [
@@ -3841,7 +3155,7 @@
       "description": "CRUD and Query application resources"
     },
     {
-      "name": "Discoverers",
+      "name": "Discovery",
       "description": "Configure discovery"
     },
     {

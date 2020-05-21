@@ -43,7 +43,7 @@ Services to delete history
 <a name="historydeleteevents"></a>
 #### Delete historic events
 ```
-POST /v2/delete/{endpointId}/events
+POST /history/v2/delete/{endpointId}/events
 ```
 
 
@@ -72,24 +72,21 @@ Delete historic events using historic access. The endpoint must be activated and
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historydeletevalues"></a>
 #### Delete historic values
 ```
-POST /v2/delete/{endpointId}/values
+POST /history/v2/delete/{endpointId}/values
 ```
 
 
@@ -118,24 +115,21 @@ Delete historic values using historic access. The endpoint must be activated and
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historydeletemodifiedvalues"></a>
 #### Delete historic values
 ```
-POST /v2/delete/{endpointId}/values/modified
+POST /history/v2/delete/{endpointId}/values/modified
 ```
 
 
@@ -164,24 +158,21 @@ Delete historic values using historic access. The endpoint must be activated and
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historydeletevaluesattimes"></a>
 #### Delete value history at specified times
 ```
-POST /v2/delete/{endpointId}/values/pick
+POST /history/v2/delete/{endpointId}/values/pick
 ```
 
 
@@ -210,18 +201,15 @@ Delete value history using historic access. The endpoint must be activated and c
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="history_resource"></a>
@@ -232,7 +220,7 @@ History raw access services
 <a name="historyreadraw"></a>
 #### Read history using json details
 ```
-POST /v2/history/read/{endpointId}
+POST /history/v2/history/read/{endpointId}
 ```
 
 
@@ -245,14 +233,14 @@ Read node history if available using historic access. The endpoint must be activ
 |Type|Name|Description|Schema|
 |---|---|---|---|
 |**Path**|**endpointId**  <br>*required*|The identifier of the activated endpoint.|string|
-|**Body**|**body**  <br>*required*|The history read request|[JTokenHistoryReadRequestApiModel](definitions.md#jtokenhistoryreadrequestapimodel)|
+|**Body**|**body**  <br>*required*|The history read request|[VariantValueHistoryReadRequestApiModel](definitions.md#variantvaluehistoryreadrequestapimodel)|
 
 
 ##### Responses
 
 |HTTP Code|Description|Schema|
 |---|---|---|
-|**200**|Success|[JTokenHistoryReadResponseApiModel](definitions.md#jtokenhistoryreadresponseapimodel)|
+|**200**|Success|[VariantValueHistoryReadResponseApiModel](definitions.md#variantvaluehistoryreadresponseapimodel)|
 
 
 ##### Consumes
@@ -261,24 +249,21 @@ Read node history if available using historic access. The endpoint must be activ
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historyreadrawnext"></a>
 #### Read next batch of history as json
 ```
-POST /v2/history/read/{endpointId}/next
+POST /history/v2/history/read/{endpointId}/next
 ```
 
 
@@ -298,7 +283,7 @@ Read next batch of node history values using historic access. The endpoint must 
 
 |HTTP Code|Description|Schema|
 |---|---|---|
-|**200**|Success|[JTokenHistoryReadNextResponseApiModel](definitions.md#jtokenhistoryreadnextresponseapimodel)|
+|**200**|Success|[VariantValueHistoryReadNextResponseApiModel](definitions.md#variantvaluehistoryreadnextresponseapimodel)|
 
 
 ##### Consumes
@@ -307,24 +292,21 @@ Read next batch of node history values using historic access. The endpoint must 
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historyupdateraw"></a>
 #### Update node history using raw json
 ```
-POST /v2/history/update/{endpointId}
+POST /history/v2/history/update/{endpointId}
 ```
 
 
@@ -337,7 +319,7 @@ Update node history using historic access. The endpoint must be activated and co
 |Type|Name|Description|Schema|
 |---|---|---|---|
 |**Path**|**endpointId**  <br>*required*|The identifier of the activated endpoint.|string|
-|**Body**|**body**  <br>*required*|The history update request|[JTokenHistoryUpdateRequestApiModel](definitions.md#jtokenhistoryupdaterequestapimodel)|
+|**Body**|**body**  <br>*required*|The history update request|[VariantValueHistoryUpdateRequestApiModel](definitions.md#variantvaluehistoryupdaterequestapimodel)|
 
 
 ##### Responses
@@ -353,18 +335,15 @@ Update node history using historic access. The endpoint must be activated and co
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="insert_resource"></a>
@@ -375,7 +354,7 @@ History insert services
 <a name="historyinsertevents"></a>
 #### Insert historic events
 ```
-POST /v2/insert/{endpointId}/events
+POST /history/v2/insert/{endpointId}/events
 ```
 
 
@@ -404,24 +383,21 @@ Insert historic events using historic access. The endpoint must be activated and
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historyinsertvalues"></a>
 #### Insert historic values
 ```
-POST /v2/insert/{endpointId}/values
+POST /history/v2/insert/{endpointId}/values
 ```
 
 
@@ -450,18 +426,15 @@ Insert historic values using historic access. The endpoint must be activated and
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="read_resource"></a>
@@ -472,7 +445,7 @@ Historic access read services
 <a name="historyreadevents"></a>
 #### Read historic events
 ```
-POST /v2/read/{endpointId}/events
+POST /history/v2/read/{endpointId}/events
 ```
 
 
@@ -492,7 +465,7 @@ Read historic events of a node if available using historic access. The endpoint 
 
 |HTTP Code|Description|Schema|
 |---|---|---|
-|**200**|Success|[HistoricEventApiModel[]HistoryReadResponseApiModel](definitions.md#historiceventapimodel-historyreadresponseapimodel)|
+|**200**|Success|[HistoricEventApiModelArrayHistoryReadResponseApiModel](definitions.md#historiceventapimodelarrayhistoryreadresponseapimodel)|
 
 
 ##### Consumes
@@ -501,24 +474,21 @@ Read historic events of a node if available using historic access. The endpoint 
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historyreadeventsnext"></a>
 #### Read next batch of historic events
 ```
-POST /v2/read/{endpointId}/events/next
+POST /history/v2/read/{endpointId}/events/next
 ```
 
 
@@ -538,7 +508,7 @@ Read next batch of historic events of a node using historic access. The endpoint
 
 |HTTP Code|Description|Schema|
 |---|---|---|
-|**200**|Success|[HistoricEventApiModel[]HistoryReadNextResponseApiModel](definitions.md#historiceventapimodel-historyreadnextresponseapimodel)|
+|**200**|Success|[HistoricEventApiModelArrayHistoryReadNextResponseApiModel](definitions.md#historiceventapimodelarrayhistoryreadnextresponseapimodel)|
 
 
 ##### Consumes
@@ -547,24 +517,21 @@ Read next batch of historic events of a node using historic access. The endpoint
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historyreadvalues"></a>
 #### Read historic processed values at specified times
 ```
-POST /v2/read/{endpointId}/values
+POST /history/v2/read/{endpointId}/values
 ```
 
 
@@ -584,7 +551,7 @@ Read processed history values of a node if available using historic access. The 
 
 |HTTP Code|Description|Schema|
 |---|---|---|
-|**200**|Success|[HistoricValueApiModel[]HistoryReadResponseApiModel](definitions.md#historicvalueapimodel-historyreadresponseapimodel)|
+|**200**|Success|[HistoricValueApiModelArrayHistoryReadResponseApiModel](definitions.md#historicvalueapimodelarrayhistoryreadresponseapimodel)|
 
 
 ##### Consumes
@@ -593,24 +560,21 @@ Read processed history values of a node if available using historic access. The 
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historyreadmodifiedvalues"></a>
 #### Read historic modified values at specified times
 ```
-POST /v2/read/{endpointId}/values/modified
+POST /history/v2/read/{endpointId}/values/modified
 ```
 
 
@@ -630,7 +594,7 @@ Read processed history values of a node if available using historic access. The 
 
 |HTTP Code|Description|Schema|
 |---|---|---|
-|**200**|Success|[HistoricValueApiModel[]HistoryReadResponseApiModel](definitions.md#historicvalueapimodel-historyreadresponseapimodel)|
+|**200**|Success|[HistoricValueApiModelArrayHistoryReadResponseApiModel](definitions.md#historicvalueapimodelarrayhistoryreadresponseapimodel)|
 
 
 ##### Consumes
@@ -639,24 +603,21 @@ Read processed history values of a node if available using historic access. The 
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historyreadvaluenext"></a>
 #### Read next batch of historic values
 ```
-POST /v2/read/{endpointId}/values/next
+POST /history/v2/read/{endpointId}/values/next
 ```
 
 
@@ -676,7 +637,7 @@ Read next batch of historic values of a node using historic access. The endpoint
 
 |HTTP Code|Description|Schema|
 |---|---|---|
-|**200**|Success|[HistoricValueApiModel[]HistoryReadNextResponseApiModel](definitions.md#historicvalueapimodel-historyreadnextresponseapimodel)|
+|**200**|Success|[HistoricValueApiModelArrayHistoryReadNextResponseApiModel](definitions.md#historicvalueapimodelarrayhistoryreadnextresponseapimodel)|
 
 
 ##### Consumes
@@ -685,24 +646,21 @@ Read next batch of historic values of a node using historic access. The endpoint
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historyreadvaluesattimes"></a>
 #### Read historic values at specified times
 ```
-POST /v2/read/{endpointId}/values/pick
+POST /history/v2/read/{endpointId}/values/pick
 ```
 
 
@@ -722,7 +680,7 @@ Read historic values of a node if available using historic access. The endpoint 
 
 |HTTP Code|Description|Schema|
 |---|---|---|
-|**200**|Success|[HistoricValueApiModel[]HistoryReadResponseApiModel](definitions.md#historicvalueapimodel-historyreadresponseapimodel)|
+|**200**|Success|[HistoricValueApiModelArrayHistoryReadResponseApiModel](definitions.md#historicvalueapimodelarrayhistoryreadresponseapimodel)|
 
 
 ##### Consumes
@@ -731,24 +689,21 @@ Read historic values of a node if available using historic access. The endpoint 
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historyreadprocessedvalues"></a>
 #### Read historic processed values at specified times
 ```
-POST /v2/read/{endpointId}/values/processed
+POST /history/v2/read/{endpointId}/values/processed
 ```
 
 
@@ -768,7 +723,7 @@ Read processed history values of a node if available using historic access. The 
 
 |HTTP Code|Description|Schema|
 |---|---|---|
-|**200**|Success|[HistoricValueApiModel[]HistoryReadResponseApiModel](definitions.md#historicvalueapimodel-historyreadresponseapimodel)|
+|**200**|Success|[HistoricValueApiModelArrayHistoryReadResponseApiModel](definitions.md#historicvalueapimodelarrayhistoryreadresponseapimodel)|
 
 
 ##### Consumes
@@ -777,18 +732,15 @@ Read processed history values of a node if available using historic access. The 
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="replace_resource"></a>
@@ -799,7 +751,7 @@ History replace services
 <a name="historyreplaceevents"></a>
 #### Replace historic events
 ```
-POST /v2/replace/{endpointId}/events
+POST /history/v2/replace/{endpointId}/events
 ```
 
 
@@ -828,24 +780,21 @@ Replace historic events using historic access. The endpoint must be activated an
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 <a name="historyreplacevalues"></a>
 #### Replace historic values
 ```
-POST /v2/replace/{endpointId}/values
+POST /history/v2/replace/{endpointId}/values
 ```
 
 
@@ -874,18 +823,15 @@ Replace historic values using historic access. The endpoint must be activated an
 * `application/json`
 * `text/json`
 * `application/*+json`
+* `application/x-msgpack`
 
 
 ##### Produces
 
+* `text/plain`
 * `application/json`
-
-
-##### Security
-
-|Type|Name|Scopes|
-|---|---|---|
-|**oauth2**|**[oauth2](security.md#oauth2)**|http://schemas.xmlsoap.org/ws/2005/05/identity/claims/authentication|
+* `text/json`
+* `application/x-msgpack`
 
 
 

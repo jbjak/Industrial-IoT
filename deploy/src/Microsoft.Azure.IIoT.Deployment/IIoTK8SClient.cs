@@ -17,6 +17,7 @@ namespace Microsoft.Azure.IIoT.Deployment {
     using Serilog;
     using System.Linq;
     using System.Diagnostics;
+    using Newtonsoft.Json.Linq;
 
     class IIoTK8SClient {
 
@@ -25,14 +26,13 @@ namespace Microsoft.Azure.IIoT.Deployment {
         private readonly IKubernetes _k8sClient;
 
         private string _iiotNamespace = null;
-        private string _nginxNamespace = null;
 
         /// <summary>
         /// Constructor of IIoTK8SClient.
         /// </summary>
         /// <param name="kubeConfigContent"></param>
         public IIoTK8SClient(string kubeConfigContent) {
-            if (string.IsNullOrEmpty(kubeConfigContent)) {
+            if (string.IsNullOrWhiteSpace(kubeConfigContent)) {
                 throw new ArgumentNullException(nameof(kubeConfigContent));
             }
 
@@ -43,19 +43,19 @@ namespace Microsoft.Azure.IIoT.Deployment {
             _k8sClient = new Kubernetes(_k8sClientConfiguration);
         }
 
+        /// <summary>
+        /// Set namespace that should be used for Azure IIoT components.
+        /// </summary>
+        /// <param name="namespaceName"></param>
         public void SetIIoTNamespace(string namespaceName) {
             _iiotNamespace = namespaceName;
-        }
-
-        public void SetNGINXIngressControllerNamespace(string namespaceName) {
-            _nginxNamespace = namespaceName;
         }
 
         public async Task<V1Namespace> CreateV1NamespaceAsync(
             string v1NamespaceContent,
             CancellationToken cancellationToken = default
         ) {
-            if (string.IsNullOrEmpty(v1NamespaceContent)) {
+            if (string.IsNullOrWhiteSpace(v1NamespaceContent)) {
                 throw new ArgumentNullException(nameof(v1NamespaceContent));
             }
 
@@ -80,6 +80,11 @@ namespace Microsoft.Azure.IIoT.Deployment {
             }
         }
 
+        /// <summary>
+        /// Create namespace for Azure Industrial IoT components.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public async Task<V1Namespace> CreateIIoTNamespaceAsync(
             CancellationToken cancellationToken = default
         ) {
@@ -89,15 +94,11 @@ namespace Microsoft.Azure.IIoT.Deployment {
             );
         }
 
-        public async Task<V1Namespace> CreateNGINXNamespaceAsync(
-            CancellationToken cancellationToken = default
-        ) {
-            return await CreateV1NamespaceAsync(
-                Resources.IIoTK8SResources._40_ingress_nginx_namespace,
-                cancellationToken
-            );
-        }
-
+        /// <summary>
+        /// Create service account, role and role binding for Azure Industrial IoT components.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public async Task<V1ServiceAccount> SetupIIoTServiceAccountAsync(
             CancellationToken cancellationToken = default
         ) {
@@ -129,44 +130,27 @@ namespace Microsoft.Azure.IIoT.Deployment {
             }
         }
 
-        public async Task<V1ServiceAccount> SetupNGINXServiceAccountAsync(
+        /// <summary>
+        /// Deploy oms agent configuration to enable scraping of Prometheus metrics.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task<V1ConfigMap> EnablePrometheusMetricsScrapingAsync(
             CancellationToken cancellationToken = default
         ) {
             try {
-                // Create ServiceAccount, Role, ClusterRole, RoleBinding and
-                // ClusterRoleBinding for NGINX Ingress controller.
-                var v1ServiceAccount = await CreateV1ServiceAccountAsync(
-                    Resources.IIoTK8SResources._41_nginx_ingress_serviceaccount,
-                    _nginxNamespace,
-                    cancellationToken
+                // Create configuration for oms agent that will enable scraping of Prometheus metrics.
+                // Here is the source of 04_oms_agent_configmap.yaml:
+                // https://github.com/microsoft/OMS-docker/blob/ci_feature_prod/Kubernetes/container-azm-ms-agentconfig.yaml
+                var v1ConfigMap = await CreateV1ConfigMapAsync(
+                    Resources.IIoTK8SResources._04_oms_agent_configmap,
+                    cancellationToken: cancellationToken
                 );
 
-                await CreateV1ClusterRoleAsync(
-                    Resources.IIoTK8SResources._42_nginx_ingress_clusterrole,
-                    cancellationToken
-                );
-
-                await CreateV1RoleAsync(
-                    Resources.IIoTK8SResources._43_nginx_ingress_role,
-                    _nginxNamespace,
-                    cancellationToken
-                );
-
-                await CreateV1RoleBindingAsync(
-                    Resources.IIoTK8SResources._44_nginx_ingress_role_nisa_binding,
-                    _nginxNamespace,
-                    cancellationToken
-                );
-
-                await CreateV1ClusterRoleBindingAsync(
-                    Resources.IIoTK8SResources._45_nginx_ingress_clusterrole_nisa_binding,
-                    cancellationToken
-                );
-
-                return v1ServiceAccount;
+                return v1ConfigMap;
             }
             catch (Exception ex) {
-                Log.Error(ex, $"Failed to create nginx-ingress-serviceaccount and roles for it");
+                Log.Error(ex, $"Failed to create configuration for oms agent.");
                 throw;
             }
         }
@@ -177,7 +161,7 @@ namespace Microsoft.Azure.IIoT.Deployment {
             IDictionary<string, string> data = null,
             CancellationToken cancellationToken = default
         ) {
-            if (string.IsNullOrEmpty(v1SecretContent)) {
+            if (string.IsNullOrWhiteSpace(v1SecretContent)) {
                 throw new ArgumentNullException(nameof(v1SecretContent));
             }
 
@@ -219,7 +203,7 @@ namespace Microsoft.Azure.IIoT.Deployment {
             IDictionary<string, string> data = null,
             CancellationToken cancellationToken = default
         ) {
-            if (string.IsNullOrEmpty(v1ConfigMapContent)) {
+            if (string.IsNullOrWhiteSpace(v1ConfigMapContent)) {
                 throw new ArgumentNullException(nameof(v1ConfigMapContent));
             }
 
@@ -255,28 +239,12 @@ namespace Microsoft.Azure.IIoT.Deployment {
             }
         }
 
-        public async Task<V1Secret> CreateIIoTEnvSecretAsync(
-            IDictionary<string, string> env,
-            CancellationToken cancellationToken = default
-        ) {
-            if (env is null) {
-                throw new ArgumentNullException(nameof(env));
-            }
-
-            return await CreateV1SecretAsync(
-                Resources.IIoTK8SResources._10_industrial_iot_env_secret,
-                _iiotNamespace,
-                env,
-                cancellationToken
-            );
-        }
-
         private async Task<V1Deployment> CreateV1DeploymentAsync(
             string v1DeploymentContent,
             string namespaceParameter = null,
             CancellationToken cancellationToken = default
         ) {
-            if (string.IsNullOrEmpty(v1DeploymentContent)) {
+            if (string.IsNullOrWhiteSpace(v1DeploymentContent)) {
                 throw new ArgumentNullException(nameof(v1DeploymentContent));
             }
 
@@ -314,7 +282,7 @@ namespace Microsoft.Azure.IIoT.Deployment {
             string namespaceParameter = null,
             CancellationToken cancellationToken = default
         ) {
-            if (string.IsNullOrEmpty(v1ServiceContent)) {
+            if (string.IsNullOrWhiteSpace(v1ServiceContent)) {
                 throw new ArgumentNullException(nameof(v1ServiceContent));
             }
 
@@ -344,103 +312,241 @@ namespace Microsoft.Azure.IIoT.Deployment {
             }
         }
 
+        /// <summary>
+        /// Deploy Azure Industrial IoT components.
+        /// </summary>
+        /// <param name="env"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public async Task DeployIIoTServicesAsync(
+            IDictionary<string, string> env,
             CancellationToken cancellationToken = default
         ) {
+            if (env is null) {
+                throw new ArgumentNullException(nameof(env));
+            }
+
             try {
                 Log.Information("Deploying Industrial IoT services to Azure AKS cluster ...");
 
+                // Create configuration secret for Azure Industrial IoT components.
+                var aiiotEnvSecret = await CreateV1SecretAsync(
+                    Resources.IIoTK8SResources._10_industrial_iot_env_secret,
+                    _iiotNamespace,
+                    env,
+                    cancellationToken
+                );
+
                 // Deploy registry service
                 await CreateV1DeploymentAsync(
-                    Resources.IIoTK8SResources._11_registry_deployment,
+                    Resources.IIoTK8SResources._20_registry_deployment,
                     _iiotNamespace,
                     cancellationToken
                 );
                 await CreateV1ServiceAsync(
-                    Resources.IIoTK8SResources._11_registry_service,
+                    Resources.IIoTK8SResources._20_registry_service,
                     _iiotNamespace,
                     cancellationToken
                 );
 
                 // Deploy twin service
                 await CreateV1DeploymentAsync(
-                    Resources.IIoTK8SResources._12_twin_deployment,
+                    Resources.IIoTK8SResources._21_twin_deployment,
                     _iiotNamespace,
                     cancellationToken
                 );
                 await CreateV1ServiceAsync(
-                    Resources.IIoTK8SResources._12_twin_service,
+                    Resources.IIoTK8SResources._21_twin_service,
                     _iiotNamespace,
                     cancellationToken
                 );
 
                 // Deploy history service
                 await CreateV1DeploymentAsync(
-                    Resources.IIoTK8SResources._13_history_deployment,
+                    Resources.IIoTK8SResources._22_history_deployment,
                     _iiotNamespace,
                     cancellationToken
                 );
                 await CreateV1ServiceAsync(
-                    Resources.IIoTK8SResources._13_history_service,
+                    Resources.IIoTK8SResources._22_history_service,
                     _iiotNamespace,
                     cancellationToken
                 );
 
                 // Deploy gateway service
                 await CreateV1DeploymentAsync(
-                    Resources.IIoTK8SResources._14_gateway_deployment,
+                    Resources.IIoTK8SResources._23_gateway_deployment,
                     _iiotNamespace,
                     cancellationToken
                 );
                 await CreateV1ServiceAsync(
-                    Resources.IIoTK8SResources._14_gateway_service,
+                    Resources.IIoTK8SResources._23_gateway_service,
                     _iiotNamespace,
                     cancellationToken
                 );
 
                 // Deploy vault service
                 await CreateV1DeploymentAsync(
-                    Resources.IIoTK8SResources._15_vault_deployment,
+                    Resources.IIoTK8SResources._24_vault_deployment,
                     _iiotNamespace,
                     cancellationToken
                 );
                 await CreateV1ServiceAsync(
-                    Resources.IIoTK8SResources._15_vault_service,
+                    Resources.IIoTK8SResources._24_vault_service,
                     _iiotNamespace,
                     cancellationToken
                 );
 
                 // Deploy alerting service
                 await CreateV1DeploymentAsync(
-                    Resources.IIoTK8SResources._16_alerting_deployment,
+                    Resources.IIoTK8SResources._25_alerting_deployment,
                     _iiotNamespace,
                     cancellationToken
                 );
 
                 // Deploy onboarding service
                 await CreateV1DeploymentAsync(
-                    Resources.IIoTK8SResources._17_onboarding_deployment,
+                    Resources.IIoTK8SResources._26_onboarding_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+                await CreateV1ServiceAsync(
+                    Resources.IIoTK8SResources._26_onboarding_svc,
                     _iiotNamespace,
                     cancellationToken
                 );
 
                 // Deploy jobs service
                 await CreateV1DeploymentAsync(
-                    Resources.IIoTK8SResources._18_jobs_deployment,
+                    Resources.IIoTK8SResources._27_jobs_deployment,
                     _iiotNamespace,
                     cancellationToken
                 );
 
                 // Deploy modelprocessor service
                 await CreateV1DeploymentAsync(
-                    Resources.IIoTK8SResources._19_modelprocessor_deployment,
+                    Resources.IIoTK8SResources._28_modelprocessor_deployment,
                     _iiotNamespace,
                     cancellationToken
                 );
 
                 // Deploy blobnotification service
                 await CreateV1DeploymentAsync(
-                    Resources.IIoTK8SResources._20_blobnotification_deployment,
+                    Resources.IIoTK8SResources._29_blobnotification_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy publisher service
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._30_publisher_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+                await CreateV1ServiceAsync(
+                    Resources.IIoTK8SResources._30_publisher_svc,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy configuration service
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._31_configuration_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+                await CreateV1ServiceAsync(
+                    Resources.IIoTK8SResources._31_configuration_svc,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy edge manager service
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._32_edge_manager_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+                await CreateV1ServiceAsync(
+                    Resources.IIoTK8SResources._32_edge_manager_svc,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy events processor service
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._33_events_processor_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy engineering tool
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._34_frontend_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+                await CreateV1ServiceAsync(
+                    Resources.IIoTK8SResources._34_frontend_svc,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy identity service
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._35_identity_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy edge jobs service
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._36_edge_jobs_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+                await CreateV1ServiceAsync(
+                    Resources.IIoTK8SResources._36_edge_jobs_svc,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy publisher jobs service
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._37_publisher_jobs_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+                await CreateV1ServiceAsync(
+                    Resources.IIoTK8SResources._37_publisher_jobs_svc,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy telemetry cdm processor service
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._38_telemetry_cdm_processor_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy telemetry processor service
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._39_telemetry_processor_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy telemetry ux processor service
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._40_telemetry_ux_processor_deployment,
+                    _iiotNamespace,
+                    cancellationToken
+                );
+
+                // Deploy registry events forwarder service
+                await CreateV1DeploymentAsync(
+                    Resources.IIoTK8SResources._41_opc_registry_events_forwarder_deployment,
                     _iiotNamespace,
                     cancellationToken
                 );
@@ -453,12 +559,19 @@ namespace Microsoft.Azure.IIoT.Deployment {
             }
         }
 
-        public async Task<Extensionsv1beta1Ingress> CreateIIoTIngressAsync(
+        /// <summary>
+        /// Create Ingress for Azure Industrial IoT components. 
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task<Networkingv1beta1Ingress> CreateIIoTIngressAsync(
+            string ingressHostname = null,
             CancellationToken cancellationToken = default
         ) {
-            return await CreateExtensionsv1beta1IngressAsync(
-                Resources.IIoTK8SResources._30_industrial_iot_ingress,
+            return await CreateNetworkingv1beta1IngressAsync(
+                Resources.IIoTK8SResources._50_industrial_iot_ingress,
                 _iiotNamespace,
+                ingressHostname,
                 cancellationToken
             );
         }
@@ -470,17 +583,17 @@ namespace Microsoft.Azure.IIoT.Deployment {
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         public async Task<IEnumerable<V1LoadBalancerIngress>> WaitForIngressIPAsync(
-            Extensionsv1beta1Ingress extensionsv1beta1Ingress,
+            Networkingv1beta1Ingress networkingv1beta1Ingress,
             CancellationToken cancellationToken = default
         ) {
-            if (extensionsv1beta1Ingress is null) {
-                throw new ArgumentNullException(nameof(extensionsv1beta1Ingress));
+            if (networkingv1beta1Ingress is null) {
+                throw new ArgumentNullException(nameof(networkingv1beta1Ingress));
             }
 
             Exception exception = null;
 
             try {
-                var tmpIngress = extensionsv1beta1Ingress;
+                var tmpIngress = networkingv1beta1Ingress;
 
                 var namespaceProperty = tmpIngress.Metadata.NamespaceProperty;
                 var labels = tmpIngress.Metadata.Labels
@@ -509,7 +622,7 @@ namespace Microsoft.Azure.IIoT.Deployment {
                     await Task.Delay(secondsDelay * 1000, cancellationToken);
 
                     var ingresses = await _k8sClient
-                        .ListNamespacedIngressAsync(
+                        .ListNamespacedIngress1Async(
                             namespaceProperty,
                             labelSelector: labelsStr,
                             cancellationToken: cancellationToken
@@ -532,70 +645,12 @@ namespace Microsoft.Azure.IIoT.Deployment {
             throw exception;
         }
 
-        public async Task<V1Secret> CreateNGINXDefaultSSLCertificateSecretAsync(
-            string certPem,
-            string privateKeyPem,
-            CancellationToken cancellationToken = default
-        ) {
-            if (string.IsNullOrEmpty(certPem)) {
-                throw new ArgumentNullException(nameof(certPem));
-            }
-            if (string.IsNullOrEmpty(privateKeyPem)) {
-                throw new ArgumentNullException(nameof(privateKeyPem));
-            }
-
-            const string tlsCrt = "tls.crt";
-            const string tlsKey = "tls.key";
-
-            var defaultSslCertificateSecret = await CreateV1SecretAsync(
-                Resources.IIoTK8SResources._25_default_ssl_certificate_secret,
-                _iiotNamespace,
-                new Dictionary<string, string> {
-                    { tlsCrt, certPem },
-                    { tlsKey, privateKeyPem}
-                },
-                cancellationToken
-            );
-
-            return defaultSslCertificateSecret;
-        }
-
-        public async Task DeployNGINXIngressControllerAsync(
-            CancellationToken cancellationToken = default
-        ) {
-            try {
-                await CreateV1ConfigMapAsync(
-                    Resources.IIoTK8SResources._50_nginx_ingress_configuration_configmap,
-                    _nginxNamespace,
-                    cancellationToken: cancellationToken
-                );
-
-                await CreateV1DeploymentAsync(
-                    Resources.IIoTK8SResources._51_nginx_ingress_controller_deployment,
-                    _nginxNamespace,
-                    cancellationToken
-                );
-
-                await CreateV1ServiceAsync(
-                    Resources.IIoTK8SResources._52_ingress_nginx_service,
-                    _nginxNamespace,
-                    cancellationToken
-                );
-
-                Log.Verbose($"Deployed NGINX Ingress Controller to Azure AKS cluster");
-            }
-            catch (Exception ex) {
-                Log.Error(ex, $"Failed to deploy NGINX Ingress Controller to Azure AKS cluster");
-                throw;
-            }
-        }
-
         public async Task<V1ServiceAccount> CreateV1ServiceAccountAsync(
             string v1ServiceAccountContent,
             string namespaceParameter = null,
             CancellationToken cancellationToken = default
         ) {
-            if (string.IsNullOrEmpty(v1ServiceAccountContent)) {
+            if (string.IsNullOrWhiteSpace(v1ServiceAccountContent)) {
                 throw new ArgumentNullException(nameof(v1ServiceAccountContent));
             }
 
@@ -631,7 +686,7 @@ namespace Microsoft.Azure.IIoT.Deployment {
             string v1ClusterRoleContent,
             CancellationToken cancellationToken = default
         ) {
-            if (string.IsNullOrEmpty(v1ClusterRoleContent)) {
+            if (string.IsNullOrWhiteSpace(v1ClusterRoleContent)) {
                 throw new ArgumentNullException(nameof(v1ClusterRoleContent));
             }
 
@@ -663,7 +718,7 @@ namespace Microsoft.Azure.IIoT.Deployment {
             string namespaceParameter = null,
             CancellationToken cancellationToken = default
         ) {
-            if (string.IsNullOrEmpty(v1RoleContent)) {
+            if (string.IsNullOrWhiteSpace(v1RoleContent)) {
                 throw new ArgumentNullException(nameof(v1RoleContent));
             }
 
@@ -699,7 +754,7 @@ namespace Microsoft.Azure.IIoT.Deployment {
             string namespaceParameter = null,
             CancellationToken cancellationToken = default
         ) {
-            if (string.IsNullOrEmpty(v1RoleBindingContent)) {
+            if (string.IsNullOrWhiteSpace(v1RoleBindingContent)) {
                 throw new ArgumentNullException(nameof(v1RoleBindingContent));
             }
 
@@ -734,7 +789,7 @@ namespace Microsoft.Azure.IIoT.Deployment {
             string v1ClusterRoleBindingContent,
             CancellationToken cancellationToken = default
         ) {
-            if (string.IsNullOrEmpty(v1ClusterRoleBindingContent)) {
+            if (string.IsNullOrWhiteSpace(v1ClusterRoleBindingContent)) {
                 throw new ArgumentNullException(nameof(v1ClusterRoleBindingContent));
             }
 
@@ -762,43 +817,122 @@ namespace Microsoft.Azure.IIoT.Deployment {
             }
         }
 
-        public async Task<Extensionsv1beta1Ingress> CreateExtensionsv1beta1IngressAsync(
-            string extensionsv1beta1IngressContent,
+        public async Task<Networkingv1beta1Ingress> CreateNetworkingv1beta1IngressAsync(
+            string networkingv1beta1IngressContent,
             string namespaceParameter = null,
+            string ingressHostname = null,
             CancellationToken cancellationToken = default
         ) {
-            if (string.IsNullOrEmpty(extensionsv1beta1IngressContent)) {
-                throw new ArgumentNullException(nameof(extensionsv1beta1IngressContent));
+            if (string.IsNullOrWhiteSpace(networkingv1beta1IngressContent)) {
+                throw new ArgumentNullException(nameof(networkingv1beta1IngressContent));
             }
 
             try {
                 Log.Verbose("Loading k8s Ingress definition ...");
-                var extensionsv1beta1IngressDefinition = Yaml
-                    .LoadFromString<Extensionsv1beta1Ingress>(
-                        extensionsv1beta1IngressContent
+                var networkingv1beta1IngressDefinition = Yaml
+                    .LoadFromString<Networkingv1beta1Ingress>(
+                        networkingv1beta1IngressContent
                     );
 
-                if (null != namespaceParameter) {
-                    extensionsv1beta1IngressDefinition.Metadata.NamespaceProperty = namespaceParameter;
+                if (!string.IsNullOrWhiteSpace(namespaceParameter)) {
+                    networkingv1beta1IngressDefinition.Metadata.NamespaceProperty = namespaceParameter;
+                }
+
+                // If hostname is provided then we will update Spec
+                if (!string.IsNullOrWhiteSpace(ingressHostname)) {
+                    // Add entry to Spec.Tls
+                    const string secretName = "tls-secret";
+                    var tls = new Networkingv1beta1IngressTLS {
+                        Hosts = new List<string> { ingressHostname },
+                        SecretName = secretName
+                    };
+                    if (networkingv1beta1IngressDefinition.Spec.Tls is null) {
+                        networkingv1beta1IngressDefinition.Spec.Tls = 
+                            new List<Networkingv1beta1IngressTLS> { tls };
+                    } else {
+                        networkingv1beta1IngressDefinition.Spec.Tls.Add(tls);
+                    }
+
+                    // Set host in Spec.Rules[0]
+                    networkingv1beta1IngressDefinition.Spec.Rules.First().Host = ingressHostname;
                 }
 
                 Log.Verbose($"Creating k8s Ingress: " +
-                    $"{extensionsv1beta1IngressDefinition.Metadata.Name} ...");
-                var extensionsv1beta1Ingress = await _k8sClient
-                    .CreateNamespacedIngressAsync(
-                        extensionsv1beta1IngressDefinition,
-                        extensionsv1beta1IngressDefinition.Metadata.NamespaceProperty,
+                    $"{networkingv1beta1IngressDefinition.Metadata.Name} ...");
+                var networkingv1beta1Ingress = await _k8sClient
+                    .CreateNamespacedIngress1Async(
+                        networkingv1beta1IngressDefinition,
+                        networkingv1beta1IngressDefinition.Metadata.NamespaceProperty,
                         cancellationToken: cancellationToken
                     );
 
-                Log.Verbose($"Created k8s Ingress: {extensionsv1beta1Ingress.Metadata.Name}");
+                Log.Verbose($"Created k8s Ingress: {networkingv1beta1Ingress.Metadata.Name}");
 
-                return extensionsv1beta1Ingress;
+                return networkingv1beta1Ingress;
             }
             catch (Exception ex) {
                 Log.Error(ex, $"Failed to create k8s Ingress");
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Create a custom ClusterIssuer object.
+        /// </summary>
+        /// <param name="clusterIssuerContent"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task<V1Alpha2ClusterIssuer> CreateV1Alpha2ClusterIssuerAsync(
+            string clusterIssuerContent,
+            CancellationToken cancellationToken = default
+        ) {
+            if (string.IsNullOrWhiteSpace(clusterIssuerContent)) {
+                throw new ArgumentNullException(nameof(clusterIssuerContent));
+            }
+
+            Log.Verbose("Loading k8s ClusterIssuer definition ...");
+            var clusterIssuerDefinition = Yaml
+            .LoadFromString<V1Alpha2ClusterIssuer>(
+                clusterIssuerContent
+            );
+
+            Log.Verbose($"Creating k8s ClusterIssuer: {clusterIssuerDefinition.Metadata.Name} ...");
+            var clusterIssuerObject = await _k8sClient
+                .CreateClusterCustomObjectAsync(
+                    clusterIssuerDefinition,
+                    V1Alpha2ClusterIssuer.KubeGroup,
+                    V1Alpha2ClusterIssuer.KubeApiVersion,
+                    V1Alpha2ClusterIssuer.KubeKindPlural,
+                    cancellationToken: cancellationToken
+                );
+
+            // Convert returned object back to V1Alpha2ClusterIssuer.
+            if (!(clusterIssuerObject is JObject)) {
+                throw new Exception($"Returned object is of unexpected type: {clusterIssuerObject.GetType()}");
+            }
+
+            // Note: Here we will loose extra fields that are not present in our V1Alpha2ClusterIssuer.
+            var clusterIssuerJObject = (JObject) clusterIssuerObject;
+            var clusterIssuer = clusterIssuerJObject.ToObject<V1Alpha2ClusterIssuer>();
+
+            Log.Verbose($"Created k8s ClusterIssuer: {clusterIssuerDefinition.Metadata.Name} ...");
+            return clusterIssuer;
+        }
+
+        /// <summary>
+        /// Create a ClusterIssuer that uses prod endpoint of Let's Encrypt.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task<V1Alpha2ClusterIssuer> CreateLetsencryptClusterIssuerAsync(
+            CancellationToken cancellationToken = default
+        ) {
+            var clusterIssuer = await CreateV1Alpha2ClusterIssuerAsync(
+                Resources.IIoTK8SResources._90_letsencrypt_cluster_issuer,
+                cancellationToken
+            );
+
+            return clusterIssuer;
         }
     }
 }

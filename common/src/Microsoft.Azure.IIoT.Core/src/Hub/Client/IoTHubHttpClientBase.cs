@@ -6,6 +6,7 @@
 namespace Microsoft.Azure.IIoT.Hub.Client {
     using Microsoft.Azure.IIoT.Exceptions;
     using Microsoft.Azure.IIoT.Http;
+    using Microsoft.Azure.IIoT.Serializers;
     using Microsoft.Azure.IIoT.Utils;
     using Serilog;
     using System;
@@ -40,10 +41,12 @@ namespace Microsoft.Azure.IIoT.Hub.Client {
         /// </summary>
         /// <param name="httpClient"></param>
         /// <param name="config"></param>
+        /// <param name="serializer"></param>
         /// <param name="logger"></param>
         protected IoTHubHttpClientBase(IHttpClient httpClient,
-            IIoTHubConfig config, ILogger logger) {
+            IIoTHubConfig config, IJsonSerializer serializer, ILogger logger) {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _config = config ?? throw new ArgumentNullException(nameof(config));
         }
@@ -59,7 +62,7 @@ namespace Microsoft.Azure.IIoT.Hub.Client {
                 Host = HubConnectionString.HostName,
                 Path = path,
                 Query = "api-version=" + kApiVersion
-            }.Uri, _config.IoTHubResourceId);
+            }.Uri);
             request.Headers.Add(HttpRequestHeader.Authorization.ToString(),
                 CreateSasToken(HubConnectionString, 3600));
             request.Headers.Add(HttpRequestHeader.UserAgent.ToString(), kClientId);
@@ -101,7 +104,7 @@ namespace Microsoft.Azure.IIoT.Hub.Client {
             }
         }
 
-        private const string kApiVersion = "2018-06-30";
+        private const string kApiVersion = "2020-03-01";
         private const string kClientId = "AzureIIoT";
 
         /// <summary>Max retry count</summary>
@@ -111,6 +114,8 @@ namespace Microsoft.Azure.IIoT.Hub.Client {
         protected readonly IIoTHubConfig _config;
         /// <summary>Http client to use in derived class</summary>
         protected readonly IHttpClient _httpClient;
+        /// <summary>Serializer in derived class</summary>
+        protected readonly IJsonSerializer _serializer;
         /// <summary>Logger to use in derived class</summary>
         protected readonly ILogger _logger;
 

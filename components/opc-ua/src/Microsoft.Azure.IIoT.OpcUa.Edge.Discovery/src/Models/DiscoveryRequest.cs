@@ -170,8 +170,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Models {
                             .Select(t => new AddressRange(t, false, 24))
                             .Concat(interfaces
                                 .Where(t => t.Gateway != null &&
-                                            !t.Gateway.Equals(System.Net.IPAddress.Any) &&
-                                            !t.Gateway.Equals(System.Net.IPAddress.None))
+                                            !t.Gateway.Equals(IPAddress.Any) &&
+                                            !t.Gateway.Equals(IPAddress.None))
                                 .Select(i => new AddressRange(i.Gateway, 32)))
                             .Distinct());
                         break;
@@ -182,8 +182,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Models {
                             .Select(t => new AddressRange(t, false))
                             .Concat(interfaces
                                 .Where(t => t.Gateway != null &&
-                                            !t.Gateway.Equals(System.Net.IPAddress.Any) &&
-                                            !t.Gateway.Equals(System.Net.IPAddress.None))
+                                            !t.Gateway.Equals(IPAddress.Any) &&
+                                            !t.Gateway.Equals(IPAddress.None))
                                 .Select(i => new AddressRange(i.Gateway, 32)))
                             .Distinct());
                         break;
@@ -266,17 +266,17 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Discovery.Models {
         /// <param name="ranges"></param>
         /// <returns></returns>
         public IEnumerable<AddressRange> AddLocalHost(IEnumerable<AddressRange> ranges) {
-            if (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")?
-                .EqualsIgnoreCase("true") ?? false) {
+            if (Host.IsContainer) {
                 try {
                     var addresses = Dns.GetHostAddresses("host.docker.internal");
                     var listedRanges = ranges.ToList();
                     return listedRanges.Concat(addresses
                         // Select ip4 addresses only
                         .Where(a => a.AddressFamily == AddressFamily.InterNetwork)
+                        .Select(a => new IPv4Address(a))
                         // Check we do not already have them in the existing ranges
                         .Where(a => !listedRanges
-                            .Any(r => ((IPv4Address)a) >= r.Low && ((IPv4Address)a) <= r.High))
+                            .Any(r => a >= r.Low && a <= r.High))
                         // Select either the local or a small subnet around it
                         .Select(a => new AddressRange(a, 32, "localhost")));
                 }

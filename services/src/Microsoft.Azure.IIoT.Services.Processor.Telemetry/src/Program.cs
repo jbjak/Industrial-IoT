@@ -8,10 +8,11 @@ namespace Microsoft.Azure.IIoT.Services.Processor.Telemetry {
     using Microsoft.Azure.IIoT.Messaging.EventHub.Services;
     using Microsoft.Azure.IIoT.Messaging.EventHub.Runtime;
     using Microsoft.Azure.IIoT.Messaging;
+    using Microsoft.Azure.IIoT.OpcUa.Protocol.Services;
     using Microsoft.Azure.IIoT.OpcUa.Subscriber.Handlers;
     using Microsoft.Azure.IIoT.OpcUa.Subscriber.Processors;
     using Microsoft.Azure.IIoT.Exceptions;
-    using Microsoft.Azure.IIoT.Hub;
+    using Microsoft.Azure.IIoT.Serializers;
     using Microsoft.Azure.IIoT.Hub.Processor.EventHub;
     using Microsoft.Azure.IIoT.Hub.Processor.Services;
     using Microsoft.Azure.IIoT.Hub.Services;
@@ -42,11 +43,13 @@ namespace Microsoft.Azure.IIoT.Services.Processor.Telemetry {
             var config = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json", true)
+                .AddFromDotEnvFile()
                 .AddEnvironmentVariables()
                 .AddEnvironmentVariables(EnvironmentVariableTarget.User)
-                .AddFromDotEnvFile()
-                .AddFromKeyVault()
                 .AddCommandLine(args)
+                // Above configuration providers will provide connection
+                // details for KeyVault configuration provider.
+                .AddFromKeyVault(providerPriority: ConfigurationProviderPriority.Lowest)
                 .Build();
 
             // Set up dependency injection for the event processor host
@@ -94,22 +97,23 @@ namespace Microsoft.Azure.IIoT.Services.Processor.Telemetry {
             var builder = new ContainerBuilder();
 
             builder.RegisterInstance(serviceInfo)
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
 
             // Register configuration interfaces
             builder.RegisterInstance(config)
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             builder.RegisterInstance(config.Configuration)
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
 
             // register diagnostics
             builder.AddDiagnostics(config);
+            builder.RegisterModule<NewtonSoftJsonModule>();
 
             // Event processor services
             builder.RegisterType<EventProcessorHost>()
                 .AsImplementedInterfaces().SingleInstance();
             builder.RegisterType<EventProcessorFactory>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             // ... and auto start
             builder.RegisterType<HostAutoStart>()
                 .AutoActivate()
@@ -117,30 +121,33 @@ namespace Microsoft.Azure.IIoT.Services.Processor.Telemetry {
 
             // Handle telemetry events
             builder.RegisterType<IoTHubDeviceEventHandler>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
+
+            builder.RegisterType<VariantEncoderFactory>()
+                .AsImplementedInterfaces();
 
             // Handle opc-ua pub/sub subscriber messages
             builder.RegisterType<MonitoredItemSampleBinaryHandler>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             builder.RegisterType<MonitoredItemSampleJsonHandler>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             builder.RegisterType<PubSubNetworkMessageBinaryHandler>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             builder.RegisterType<PubSubNetworkMessageJsonHandler>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
 
-            // ... which forward to secondary eventhub
+            // ... and forward result to secondary eventhub
             builder.RegisterType<MonitoredItemSampleForwarder>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
 
             builder.RegisterType<EventHubNamespaceClient>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
             builder.RegisterType<EventHubClientConfig>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
 
-            // ... forward unknown samples to the tsi eventhub
+            // ... forward unknown samples to the secondary eventhub
             builder.RegisterType<UnknownTelemetryForwarder>()
-                .AsImplementedInterfaces().SingleInstance();
+                .AsImplementedInterfaces();
 
             return builder;
         }
@@ -148,7 +155,7 @@ namespace Microsoft.Azure.IIoT.Services.Processor.Telemetry {
         /// <summary>
         /// Forwards telemetry not part of the platform for example from other devices
         /// </summary>
-        internal sealed class UnknownTelemetryForwarder : IUnknownEventHandler, IDisposable {
+        internal sealed class UnknownTelemetryForwarder : IUnknownEventProcessor, IDisposable {
 
             /// <summary>
             /// Create forwarder

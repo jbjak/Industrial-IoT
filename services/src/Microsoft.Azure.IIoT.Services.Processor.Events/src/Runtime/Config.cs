@@ -8,37 +8,29 @@ namespace Microsoft.Azure.IIoT.Services.Processor.Events.Runtime {
     using Microsoft.Azure.IIoT.Hub.Processor;
     using Microsoft.Azure.IIoT.Hub.Processor.Runtime;
     using Microsoft.Azure.IIoT.Hub.Client.Runtime;
+    using Microsoft.Azure.IIoT.Hub.Client;
     using Microsoft.Azure.IIoT.Messaging.EventHub;
-    using Microsoft.Azure.IIoT.Messaging.SignalR;
-    using Microsoft.Azure.IIoT.Messaging.SignalR.Runtime;
-    using Microsoft.Azure.IIoT.OpcUa.Api.Onboarding;
-    using Microsoft.Azure.IIoT.OpcUa.Api.Runtime;
+    using Microsoft.Azure.IIoT.Messaging.ServiceBus;
+    using Microsoft.Azure.IIoT.Messaging.ServiceBus.Runtime;
     using Microsoft.Extensions.Configuration;
     using System;
 
     /// <summary>
     /// Telemetry processor service configuration
     /// </summary>
-    public class Config : DiagnosticsConfig, IEventProcessorConfig, IEventHubConsumerConfig,
-        IOnboardingConfig, ISignalRServiceConfig, IEventProcessorHostConfig  {
-
-        private const string kEventHubConsumerGroupEventsKey =
-            "EventHubConsumerGroupEvents";
+    public class Config : DiagnosticsConfig, IEventProcessorHostConfig,
+        IEventHubConsumerConfig, IServiceBusConfig, IIoTHubConfig,
+        IEventProcessorConfig {
 
         /// <inheritdoc/>
-        public string OpcUaOnboardingServiceUrl => _ia.OpcUaOnboardingServiceUrl;
-        /// <inheritdoc/>
-        public string OpcUaOnboardingServiceResourceId => _ia.OpcUaOnboardingServiceResourceId;
+        public string ConsumerGroup => GetStringOrDefault(
+            PcsVariable.PCS_IOTHUB_EVENTHUB_CONSUMER_GROUP_EVENTS,
+                () => "events");
 
         /// <inheritdoc/>
         public string EventHubConnString => _eh.EventHubConnString;
         /// <inheritdoc/>
         public string EventHubPath => _eh.EventHubPath;
-        /// <inheritdoc/>
-        /// <summary> Event hub events consumer group </summary>
-        public string ConsumerGroup => GetStringOrDefault(kEventHubConsumerGroupEventsKey,
-            () => GetStringOrDefault(PcsVariable.PCS_IOTHUB_EVENTHUB_CONSUMER_GROUP_EVENTS,
-                () => "events"));
         /// <inheritdoc/>
         public bool UseWebsockets => _eh.UseWebsockets;
 
@@ -47,18 +39,25 @@ namespace Microsoft.Azure.IIoT.Services.Processor.Events.Runtime {
         /// <inheritdoc/>
         public TimeSpan ReceiveTimeout => _ep.ReceiveTimeout;
         /// <inheritdoc/>
-        public string BlobStorageConnString => _ep.BlobStorageConnString;
+        public string EndpointSuffix => _ep.EndpointSuffix;
+        /// <inheritdoc/>
+        public string AccountName => _ep.AccountName;
+        /// <inheritdoc/>
+        public string AccountKey => _ep.AccountKey;
         /// <inheritdoc/>
         public string LeaseContainerName => _ep.LeaseContainerName;
         /// <inheritdoc/>
-        public bool InitialReadFromEnd => _ep.InitialReadFromEnd;
+        public bool InitialReadFromEnd => true;
+        /// <inheritdoc/>
+        public TimeSpan? SkipEventsOlderThan => TimeSpan.FromMinutes(5);
         /// <inheritdoc/>
         public TimeSpan? CheckpointInterval => _ep.CheckpointInterval;
 
         /// <inheritdoc/>
-        public string SignalRHubName => _sr.SignalRHubName;
+        public string ServiceBusConnString => _sb.ServiceBusConnString;
+
         /// <inheritdoc/>
-        public string SignalRConnString => _sr.SignalRConnString;
+        public string IoTHubConnString => _hub.IoTHubConnString;
 
         /// <summary>
         /// Configuration constructor
@@ -67,13 +66,13 @@ namespace Microsoft.Azure.IIoT.Services.Processor.Events.Runtime {
         public Config(IConfiguration configuration) : base(configuration) {
             _ep = new EventProcessorConfig(configuration);
             _eh = new IoTHubEventConfig(configuration);
-            _ia = new InternalApiConfig(configuration);
-            _sr = new SignalRServiceConfig(configuration);
+            _sb = new ServiceBusConfig(configuration);
+            _hub = new IoTHubConfig(configuration);
         }
 
         private readonly EventProcessorConfig _ep;
         private readonly IoTHubEventConfig _eh;
-        private readonly InternalApiConfig _ia;
-        private readonly SignalRServiceConfig _sr;
+        private readonly ServiceBusConfig _sb;
+        private readonly IoTHubConfig _hub;
     }
 }
