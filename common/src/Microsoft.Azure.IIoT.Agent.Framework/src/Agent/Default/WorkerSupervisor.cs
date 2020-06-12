@@ -43,14 +43,16 @@ namespace Microsoft.Azure.IIoT.Agent.Framework.Agent {
 
         /// <inheritdoc/>
         public async Task StopAsync() {
+            _logger.Information("Stopping worker supervisor");
             var stopTasks = new List<Task>();
             _ensureWorkerRunningTimer.Stop();
 
-            foreach (var instance in _instances) {
+            foreach (var instance in _instances.ToList()) {
                 stopTasks.Add(instance.Key.StopAsync());
             }
 
             await Task.WhenAll(stopTasks);
+            _logger.Information("Worker supervisor successfully stopped");
         }
 
         /// <inheritdoc/>
@@ -107,16 +109,24 @@ namespace Microsoft.Azure.IIoT.Agent.Framework.Agent {
         private async Task EnsureWorkersAsync() {
             var workerStartTasks = new List<Task>();
 
-            while (_instances.Count < (_agentConfigProvider.Config?.MaxWorkers ?? kDefaultWorkers)) {
-                _logger.Information("Creating new worker...");
-                var worker = await CreateWorker();
-            }
+            while (true) {
+                var workers = _agentConfigProvider.Config?.MaxWorkers ?? kDefaultWorkers;
+                while (_instances.Count < workers) {
+                    _logger.Information("Creating new worker...");
+                    var worker = await CreateWorker();
+                }
 
-            foreach (var stoppedWorker in _instances.Keys.Where(s => s.Status == WorkerStatus.Stopped)) {
-                _logger.Information("Starting worker '{workerId}'...", stoppedWorker.WorkerId);
-                workerStartTasks.Add(stoppedWorker.StartAsync());
+                foreach (var stoppedWorker in _instances.Keys.Where(s => s.Status == WorkerStatus.Stopped)) {
+                    _logger.Information("Starting worker '{workerId}'...", stoppedWorker.WorkerId);
+                    workerStartTasks.Add(stoppedWorker.StartAsync());
+                }
+                await Task.WhenAll(workerStartTasks);
+                // the configuration might have been changed by workers execution
+                var newWorkers = _agentConfigProvider.Config?.MaxWorkers ?? kDefaultWorkers;
+                if (workers >= newWorkers) {
+                    break;
+                }
             }
-            await Task.WhenAll(workerStartTasks);
         }
 
         private const int kDefaultWorkers = 5; // TODO - single listener, dynamic workers.

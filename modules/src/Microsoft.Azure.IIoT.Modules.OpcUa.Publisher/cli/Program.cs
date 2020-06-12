@@ -23,7 +23,6 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Cli {
     using System.Diagnostics.Tracing;
     using System.Linq;
     using System.Net;
-    using System.Runtime.InteropServices;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -36,7 +35,7 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Cli {
         /// Entry point
         /// </summary>
         public static void Main(string[] args) {
-            var checkTrust = false;
+            var checkTrust = true;
             var withServer = false;
             var verbose = false;
             string deviceId = null, moduleId = null;
@@ -184,7 +183,7 @@ Options:
                 using (var server = new ServerWrapper(logger)) { // Start test server
                     // Start publisher module
                     var host = Task.Run(() => HostAsync(config, logger, deviceId,
-                        moduleId, args, verbose, true), cts.Token);
+                        moduleId, args, verbose, false), cts.Token);
 
                     Console.WriteLine("Press key to cancel...");
                     Console.ReadKey();

@@ -15,6 +15,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
     using Serilog;
     using System;
     using System.Collections.Generic;
+    using System.Collections.Concurrent;
     using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
@@ -22,7 +23,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
     /// <summary>
     /// Session manager
     /// </summary>
-    public class DefaultSessionManager : ISessionManager {
+    public class DefaultSessionManager : ISessionManager, IDisposable {
 
         /// <inheritdoc/>
         public int SessionCount => _sessions.Count;
@@ -38,92 +39,552 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
             _clientConfig = clientConfig;
             _logger = logger;
             _identity = identity;
+            _applicationConfiguration = _clientConfig.
+                ToApplicationConfigurationAsync(_identity, true, OnValidate).Result;
+            _endpointConfiguration = _clientConfig.ToEndpointConfiguration();
+
             _lock = new SemaphoreSlim(1, 1);
+            _cts = new CancellationTokenSource();
+            _runner = Task.Run(() => RunAsync(_cts.Token));
         }
 
         /// <inheritdoc/>
-        public async Task<Session> GetOrCreateSessionAsync(ConnectionModel connection,
-            bool createIfNotExists, bool forceActivation) {
+        public int GetNumberOfConnectionRetries(ConnectionModel connection) {
 
-            // Find session and if not exists create
-            var id = new ConnectionIdentifier(connection);
-            await _lock.WaitAsync();
+            var key = new ConnectionIdentifier(connection);
+            _lock.Wait();
             try {
-                // try to get an existing session
-                if (_sessions.TryGetValue(id, out var wrapper)) {
-                    if (wrapper != null && 
-                        (forceActivation || !wrapper.Session.Connected || 
-                        wrapper.MissedKeepAlives >= wrapper.MaxKeepAlives)) {
-                        // attempt to reactivate 
-                        bool dispose = true;
-                        try {
-                            wrapper.Session.Reconnect();
-                        }
-                        catch (ServiceResultException ex) {
-                            if (ex.StatusCode == StatusCodes.BadNotConnected) {
-                                dispose = false;
-                            }
-                            else {
-                                _logger.Warning("Failed to reconnect session {sessionName}. Dispose and create new",
-                                    wrapper.Session.SessionName, ex.Message);
-                            }
-                        }
-                        catch (Exception ex){
-                            _logger.Warning("Failed to reconnect session {sessionName}. Dispose and create new",
-                                wrapper.Session.SessionName, ex.Message);
-                        }
-                        finally {
-                            if (dispose) {
-                                //  todo check status codes
-                                _sessions.Remove(id);
-                                // Remove subscriptions
-                                if (wrapper.Session.SubscriptionCount > 0) {
-                                    foreach (var subscription in wrapper.Session.Subscriptions) {
-                                        Try.Op(() => subscription.RemoveItems(subscription.MonitoredItems));
-                                        Try.Op(() => subscription.DeleteItems());
-                                    }
-                                    Try.Op(() => wrapper.Session.RemoveSubscriptions(wrapper.Session.Subscriptions));
-                                }
-                                Try.Op(wrapper.Session.Close);
-                                Try.Op(wrapper.Session.Dispose);
-                                wrapper = null;
-                            }
-                        }
-                    }
+                if (!_sessions.TryGetValue(key, out var wrapper)) {
+                    return 0;
                 }
-
-                if (wrapper == null && createIfNotExists) {
-                    var endpointUrlCandidates = id.Connection.Endpoint.Url.YieldReturn();
-                    if (id.Connection.Endpoint.AlternativeUrls != null) {
-                        endpointUrlCandidates = endpointUrlCandidates.Concat(
-                            id.Connection.Endpoint.AlternativeUrls);
-                    }
-                    var exceptions = new List<Exception>();
-                    foreach (var endpointUrl in endpointUrlCandidates) {
-                        try {
-                            wrapper = await CreateSessionAsync(endpointUrl, id);
-                            if (wrapper?.Session != null) {
-                                _logger.Information("Connected on {endpointUrl}", endpointUrl);
-                                _sessions.Add(id, wrapper);
-                                return wrapper?.Session;
-                            }
-                        }
-                        catch (Exception ex) {
-                            _logger.Debug("Failed to connect on {endpointUrl}: {message} - try again...",
-                                endpointUrl, ex.Message);
-                            exceptions.Add(ex);
-                        }
-                    }
-                    throw new AggregateException(exceptions);
-                }
-                return wrapper?.Session;
-            }
-            catch (Exception ex) {
-                _logger.Error(ex, "Failed to get or create session.");
-                return null;
+                return wrapper.NumberOfConnectRetries;
             }
             finally {
                 _lock.Release();
+            }
+        }
+
+        /// <inheritdoc/>
+        public Session GetOrCreateSession(ConnectionModel connection,
+            bool createIfNotExists) {
+
+            // Find session and if not exists create
+            var id = new ConnectionIdentifier(connection);
+            _lock.Wait();
+            try {
+                // try to get an existing session
+                if (!_sessions.TryGetValue(id, out var wrapper)) {
+                    if (!createIfNotExists) {
+                        return null;
+                    }
+                    wrapper = new SessionWrapper() {
+                        Id = id.ToString(),
+                        MissedKeepAlives = 0,
+                        MaxKeepAlives = (int)_clientConfig.MaxKeepAliveCount,
+                        State = SessionState.Init,
+                        Session = null,
+                        ReportedStatus = StatusCodes.Good,
+                        IdleCount = 0
+                    };
+                    _sessions.Add(id, wrapper);
+                    TriggerKeepAlive();
+                }
+                switch (wrapper.State) {
+                    case SessionState.Running:
+                    case SessionState.Refresh:
+                        return wrapper.Session;
+                    case SessionState.Retry:
+                    case SessionState.Init:
+                    case SessionState.Failed:
+                    case SessionState.Disconnect:
+                        break;
+                    default:
+                        throw new InvalidOperationException($"Illegal SessionState ({wrapper.State})");
+                }
+            }
+            catch (Exception ex) {
+                _logger.Error(ex, "Failed to get/create session for Id '{id}'", id);
+            }
+            finally {
+                _lock.Release();
+            }
+            return null;
+        }
+
+        /// <inheritdoc/>
+        public async Task RemoveSessionAsync(ConnectionModel connection, bool onlyIfEmpty = true) {
+            var key = new ConnectionIdentifier(connection);
+            await _lock.WaitAsync().ConfigureAwait(false);
+            try {
+                if (!_sessions.TryGetValue(key, out var wrapper)) {
+                    return;
+                }
+                if (onlyIfEmpty && wrapper._subscriptions.Count == 0) {
+                    wrapper.State = SessionState.Disconnect;
+                    TriggerKeepAlive();
+                }
+            }
+            finally {
+                _lock.Release();
+            }
+        }
+
+        /// <inheritdoc/>
+        public void RegisterSubscription(ISubscription subscription) {
+            var id = new ConnectionIdentifier(subscription.Connection);
+            _lock.Wait();
+            try {
+                if (!_sessions.TryGetValue(id, out var wrapper)) {
+                    wrapper = new SessionWrapper() {
+                        Id = id.ToString(),
+                        MissedKeepAlives = 0,
+                        MaxKeepAlives = (int)_clientConfig.MaxKeepAliveCount,
+                        State = SessionState.Init,
+                        Session = null,
+                        IdleCount = 0
+                    };
+                    _sessions.Add(id, wrapper);
+                }
+                wrapper._subscriptions.AddOrUpdate(subscription.Id, subscription);
+                _logger.Information("Subscription '{subscriptionId}' registered/updated in session '{id}' in state {state}",
+                    subscription.Id, id, wrapper.State);
+                if (wrapper.State == SessionState.Running) {
+                    wrapper.State = SessionState.Refresh;
+                }
+                TriggerKeepAlive();
+            }
+            finally {
+                _lock.Release();
+            }
+        }
+
+        /// <inheritdoc/>
+        public void UnregisterSubscription(ISubscription subscription) {
+            var id = new ConnectionIdentifier(subscription.Connection);
+            _lock.Wait();
+            try {
+                if (!_sessions.TryGetValue(id, out var wrapper)) {
+                    return;
+                }
+                if (wrapper._subscriptions.TryRemove(subscription.Id, out _)) {
+                    _logger.Information("Subscription '{subscriptionId}' unregistered from session '{sessionId}' in state {state}",
+                        subscription.Id, id, wrapper.State);
+                }
+            }
+            finally {
+                _lock.Release();
+            }
+        }
+
+        /// <summary>
+        /// Dispose
+        /// </summary>
+        public void Dispose() {
+            Try.Async(StopAsync).Wait();
+
+            // Dispose
+            _cts.Dispose();
+            _lock.Dispose();
+        }
+
+        /// <summary>
+        /// stop all sessions
+        /// </summary>
+        /// <returns></returns>
+        public async Task StopAsync() {
+            var processingTasks = new List<Task>();
+            try {
+                _logger.Information("Stopping all sessions");
+                foreach (var session in _sessions.ToList()) {
+                    session.Value.State = SessionState.Disconnect;
+                    processingTasks.Add(session.Value.Processing);
+                }
+                TriggerKeepAlive();
+                Try.Op(() => _cts?.Cancel());
+                await _runner.ConfigureAwait(false);
+                _logger.Information("Succesfully stopped all sessions");
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) {
+                _logger.Error(ex, "Unexpected exception stopping processor thread");
+            }
+            finally {
+                await Task.WhenAll(processingTasks);
+            }
+        }
+
+        /// <summary>
+        /// Session manager's conmnection management runner task
+        /// </summary>
+        /// <param name="ct"></param>
+        /// <returns></returns>
+        private async Task RunAsync(CancellationToken ct) {
+
+            var keepAliveCheckInterval = _clientConfig.KeepAliveInterval > 0 ?
+                _clientConfig.KeepAliveInterval : kDefaultOperationTimeout;
+
+            while (!ct.IsCancellationRequested) {
+                _triggerKeepAlive = new TaskCompletionSource<bool>();
+                foreach (var sessionWrapper in _sessions.ToList()) {
+                    var wrapper = sessionWrapper.Value;
+                    var id = sessionWrapper.Key;
+                    try {
+                        switch (wrapper.State) {
+                            case SessionState.Refresh:
+                                if (wrapper.Processing == null || wrapper.Processing.IsCompleted) {
+                                    wrapper.Processing = Task.Run(() => HandleRefreshAsync(id, wrapper, ct));
+                                }
+                                break;
+                            case SessionState.Running:
+                                // nothing to do
+                                break;
+                            case SessionState.Retry:
+                                if (wrapper.Processing == null || wrapper.Processing.IsCompleted) {
+                                    wrapper.Processing = Task.Run(() => HandleRetryAsync(id, wrapper, ct));
+                                }
+                                break;
+                            case SessionState.Init:
+                                if (wrapper.Processing == null || wrapper.Processing.IsCompleted) {
+                                    wrapper.Processing = Task.Run(() => HandleInitAsync(id, wrapper, ct));
+                                }
+                                break;
+                            case SessionState.Failed:
+                                if (wrapper.Processing == null || wrapper.Processing.IsCompleted) {
+                                    wrapper.Processing = Task.Run(() => HandleFailedAsync(id, wrapper, ct));
+                                }
+                                break;
+                            case SessionState.Disconnect:
+                                if (wrapper.Processing == null || wrapper.Processing.IsCompleted) {
+                                    wrapper.Processing = Task.Run(() => HandleDisconnectAsync(id, wrapper));
+                                }
+                                break;
+                            default:
+                                throw new InvalidOperationException($"Illegal SessionState ({wrapper.State})");
+                        }
+                    }
+                    catch (Exception ex) {
+                        _logger.Error(ex, "Failed to process statemachine for session Id '{id}'", sessionWrapper.Key);
+                    }
+                }
+
+                var delay = Task.Delay(keepAliveCheckInterval, ct);
+                await Task.WhenAny(delay, _triggerKeepAlive.Task).ConfigureAwait(false);
+                _logger.Debug("Runner Keepalive reset due to {delay} {trigger}",
+                    delay.IsCompleted ? "checkAlive" : String.Empty,
+                    _triggerKeepAlive.Task.IsCompleted ? "triggerKeepAlive" : String.Empty);
+            }
+        }
+
+        /// <summary>
+        /// Handle retry state of a session
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="wrapper"></param>
+        /// <param name="ct"></param>
+        /// <returns></returns>
+        private async Task HandleRetryAsync(ConnectionIdentifier id,
+            SessionWrapper wrapper, CancellationToken ct) {
+            try {
+
+                if (!wrapper._subscriptions.Any()) {
+                    if (wrapper.IdleCount < wrapper.MaxKeepAlives) {
+                        wrapper.IdleCount++;
+                    }
+                    else {
+                        _logger.Information("Session '{id}' set to disconnect in {state}", id, wrapper.State);
+                        wrapper.State = SessionState.Disconnect;
+                        await HandleDisconnectAsync(id, wrapper).ConfigureAwait(false);
+                        return;
+                    }
+                }
+                else {
+                    wrapper.IdleCount = 0;
+                }
+
+                wrapper.MissedKeepAlives++;
+                _logger.Information("Session '{id}' missed {keepAlives} Keepalive(s) due to {status}, " +
+                        "waiting to reconnect...", id, wrapper.MissedKeepAlives, wrapper.ReportedStatus);
+                if (!ct.IsCancellationRequested) {
+                    wrapper.Session.Reconnect();
+                    wrapper.ReportedStatus = StatusCodes.Good;
+                    wrapper.State = SessionState.Running;
+                    wrapper.MissedKeepAlives = 0;
+
+                    // reactivate all subscriptons
+                    foreach (var subscription in wrapper._subscriptions.Values) {
+                        if (!ct.IsCancellationRequested) {
+                            await subscription.ActivateAsync(wrapper.Session).ConfigureAwait(false);
+                        }
+                    }
+                }
+                return;
+            }
+            catch (Exception e) {
+                wrapper.NumberOfConnectRetries++;
+                if (e is ServiceResultException sre) {
+                    switch (sre.StatusCode) {
+                        case StatusCodes.BadNotConnected:
+                        case StatusCodes.BadNoCommunication:
+                        case StatusCodes.BadSessionNotActivated:
+                        case StatusCodes.BadServerHalted:
+                        case StatusCodes.BadServerNotConnected:
+                            _logger.Warning("Failed to reconnect session '{id}', " +
+                                "will retry later", id);
+                            if (wrapper.MissedKeepAlives < wrapper.MaxKeepAlives) {
+                                // retry later
+                                return;
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                _logger.Warning("Failed to reconnect session '{id}' due to {exception}, " +
+                    " disposing and trying to create new", id, e.Message);
+            }
+
+            // cleanup the session
+            if (wrapper.Session.SubscriptionCount > 0) {
+                foreach (var subscription in wrapper.Session.Subscriptions) {
+                    Try.Op(() => subscription.DeleteItems());
+                    Try.Op(() => subscription.Delete(true));
+                }
+                Try.Op(() => wrapper.Session.RemoveSubscriptions(wrapper.Session.Subscriptions));
+            }
+            Try.Op(wrapper.Session.Close);
+            Try.Op(wrapper.Session.Dispose);
+            wrapper.Session = null;
+            wrapper.MissedKeepAlives = 0;
+            wrapper.ReportedStatus = StatusCodes.Good;
+            wrapper.State = SessionState.Failed;
+
+            await HandleInitAsync(id, wrapper, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Handles the failed state of the session
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="wrapper"></param>
+        /// <param name="ct"></param>
+        /// <returns></returns>
+        private async Task HandleFailedAsync(ConnectionIdentifier id,
+            SessionWrapper wrapper, CancellationToken ct) {
+            try {
+                // check if session requires clenup
+                if (!wrapper._subscriptions.Any()) {
+                    if (wrapper.IdleCount < wrapper.MaxKeepAlives) {
+                        wrapper.IdleCount++;
+                    }
+                    else {
+                        _logger.Information("Session '{id}' set to disconnect in {state}",
+                               id, wrapper.State);
+                        wrapper.State = SessionState.Disconnect;
+                        await HandleDisconnectAsync(id, wrapper).ConfigureAwait(false);
+                        return;
+                    }
+                }
+                else {
+                    wrapper.IdleCount = 0;
+                }
+                if (!ct.IsCancellationRequested) {
+                    await HandleInitAsync(id, wrapper, ct).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) {
+                _logger.Error(ex, "Failed to reinitiate failed session");
+            }
+        }
+
+        /// <summary>
+        /// Handles the initialization state of the session
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="wrapper"></param>
+        /// <param name="ct"></param>
+        /// <returns></returns>
+        private async Task HandleInitAsync(ConnectionIdentifier id,
+        SessionWrapper wrapper, CancellationToken ct) {
+            try {
+                if (wrapper.Session != null) {
+                    _logger.Warning("Session '{id}' still attached to wrapper in {state}",
+                        id, wrapper.State);
+                    Try.Op(wrapper.Session.Dispose);
+                    wrapper.Session = null;
+                }
+                _logger.Debug("Initializing session '{id}'...", id);
+                var endpointUrlCandidates = id.Connection.Endpoint.Url.YieldReturn();
+                if (id.Connection.Endpoint.AlternativeUrls != null) {
+                    endpointUrlCandidates = endpointUrlCandidates.Concat(
+                        id.Connection.Endpoint.AlternativeUrls);
+                }
+                var exceptions = new List<Exception>();
+                foreach (var endpointUrl in endpointUrlCandidates) {
+                    try {
+                        if (!ct.IsCancellationRequested) {
+                            var session = await CreateSessionAsync(endpointUrl, id, wrapper).ConfigureAwait(false);
+                            if (session != null) {
+                                _logger.Information("Connected to '{endpointUrl}'", endpointUrl);
+                                session.Handle = wrapper;
+                                wrapper.Session = session;
+                                foreach (var subscription in wrapper._subscriptions.Values) {
+                                    await subscription.EnableAsync(wrapper.Session).ConfigureAwait(false);
+                                }
+                                foreach (var subscription in wrapper._subscriptions.Values) {
+                                    await subscription.ActivateAsync(wrapper.Session).ConfigureAwait(false);
+                                }
+                                wrapper.State = SessionState.Running;
+                                _logger.Debug("Session '{id}' successfully initialized", id);
+                                return;
+                            }
+                        }
+                    }
+                    catch (Exception ex) {
+                        _logger.Debug("Failed to connect to {endpointUrl}: {message} - try again...",
+                            endpointUrl, ex.Message);
+                        exceptions.Add(ex);
+                    }
+                }
+                throw new AggregateException(exceptions);
+            }
+            catch (ServiceResultException sre) {
+                _logger.Warning("Failed to create session '{id}' due to {exception}",
+                    id, sre.StatusCode.ToString());
+            }
+            catch (AggregateException aex) {
+                _logger.Warning("Failed to create session '{id}' due to {exception}",
+                    id, aex.Message);
+            }
+            catch (Exception ex) {
+                _logger.Error(ex, "Failed to create session '{id}'", id);
+            }
+            wrapper.NumberOfConnectRetries++;
+            wrapper.State = SessionState.Failed;
+        }
+
+        /// <summary>
+        /// Handles the refresh state of a session
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="wrapper"></param>
+        /// <param name="ct"></param>
+        /// <returns></returns>
+        private async Task HandleRefreshAsync(ConnectionIdentifier id,
+            SessionWrapper wrapper, CancellationToken ct) {
+            try {
+                _logger.Debug("Refreshing session '{id}'", id);
+                if (wrapper.Session != null) {
+                    if (StatusCode.IsGood(wrapper.ReportedStatus)) {
+                        if (wrapper.Session.Connected &&
+                            !wrapper.Session.KeepAliveStopped) {
+                            foreach (var subscription in wrapper._subscriptions.Values) {
+                                if (!ct.IsCancellationRequested) {
+                                    await subscription.ActivateAsync(wrapper.Session).ConfigureAwait(false);
+                                }
+                            }
+                            _logger.Debug("Refreshing done for session '{id}'", id);
+                            return;
+                        }
+                        wrapper.ReportedStatus = StatusCodes.BadNoCommunication;
+                    }
+                    wrapper.State = SessionState.Retry;
+                    await HandleRetryAsync(id, wrapper, ct).ConfigureAwait(false);
+                }
+                else {
+                    wrapper.State = SessionState.Failed;
+                    await HandleInitAsync(id, wrapper, ct).ConfigureAwait(false);
+                }
+            }
+            catch (Exception e) {
+                _logger.Error(e, "Failed to refresh session '{id}'", id);
+            }
+        }
+
+        /// <summary>
+        /// Handles the disconnect state of a session
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="wrapper"></param>
+        /// <returns></returns>
+        private async Task HandleDisconnectAsync(ConnectionIdentifier id, SessionWrapper wrapper) {
+            _logger.Debug("Removing session '{id}'", id);
+            await _lock.WaitAsync().ConfigureAwait(false);
+            try {
+                _sessions.Remove(id);
+            }
+            finally {
+                _lock.Release();
+            }
+            try {
+                if (wrapper != null && wrapper.Session != null) {
+                    wrapper.Session.Handle = null;
+                    // Remove subscriptions
+                    if (wrapper.Session.SubscriptionCount > 0) {
+                        foreach (var subscription in wrapper.Session.Subscriptions) {
+                            Try.Op(() => subscription.DeleteItems());
+                        }
+                        Try.Op(() => wrapper.Session.RemoveSubscriptions(wrapper.Session.Subscriptions));
+                    }
+                    // close the session
+                    Try.Op(wrapper.Session.Close);
+                    Try.Op(wrapper.Session.Dispose);
+                    wrapper.Session = null;
+                }
+            }
+            catch (Exception ex) {
+                _logger.Error(ex, "Failed to remove session '{id}'", id);
+            }
+        }
+
+        // Validate certificates
+        private void OnValidate(CertificateValidator sender, CertificateValidationEventArgs e) {
+            if (e.Accept == true) {
+                return;
+            }
+            if (e.Error.StatusCode == StatusCodes.BadCertificateUntrusted) {
+                if (_applicationConfiguration.SecurityConfiguration.AutoAcceptUntrustedCertificates) {
+                    _logger.Warning("Accepting untrusted peer certificate {Thumbprint}, '{Subject}' " +
+                        "due to AutoAccept(UntrustedCertificates) set!",
+                        e.Certificate.Thumbprint, e.Certificate.Subject);
+                    e.Accept = true;
+                }
+
+                // Validate thumbprint
+                if (e.Certificate.RawData != null && !string.IsNullOrWhiteSpace(e.Certificate.Thumbprint)) {
+                    
+                    if (_sessions.Keys.Any(id => id?.Connection?.Endpoint?.Certificate != null &&
+                        e.Certificate.Thumbprint == id.Connection.Endpoint.Certificate)) {
+                        e.Accept = true;
+
+                        _logger.Information("Accepting untrusted peer certificate {Thumbprint}, '{Subject}' " +
+                            "since it was specified in the endpoint!",
+                            e.Certificate.Thumbprint, e.Certificate.Subject);
+
+                        // add the certificate to trusted store
+                        _applicationConfiguration.SecurityConfiguration.AddTrustedPeer(e.Certificate.RawData);
+                        try {
+                            var store = _applicationConfiguration.
+                                SecurityConfiguration.TrustedPeerCertificates.OpenStore();
+
+                            try {
+                                store.Delete(e.Certificate.Thumbprint);
+                                store.Add(e.Certificate);
+                            }
+                            finally {
+                                store.Close();
+                            }
+                        }
+                        catch (Exception ex) {
+                            _logger.Warning(ex,"Failed to add peer certificate {Thumbprint}, '{Subject}' " +
+                                "to trusted store", e.Certificate.Thumbprint, e.Certificate.Subject);
+                        }
+                    }
+                }
+            }
+            if (!e.Accept) {
+                _logger.Information("Rejecting peer certificate {Thumbprint}, '{Subject}' " +
+                    "because of {Status}.", e.Certificate.Thumbprint, e.Certificate.Subject,
+                    e.Error.StatusCode);
             }
         }
 
@@ -132,33 +593,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
         /// </summary>
         /// <param name="endpointUrl"></param>
         /// <param name="id"></param>
+        /// <param name="wrapper"></param>
         /// <returns></returns>
-        private async Task<SessionWrapper> CreateSessionAsync(string endpointUrl,
-            ConnectionIdentifier id) {
-            var sessionName = id.ToString();
-
-            // Validate certificates
-            void OnValidate(CertificateValidator sender, CertificateValidationEventArgs e) {
-                if (!e.Accept && e.Error.StatusCode == StatusCodes.BadCertificateUntrusted) {
-                    // Validate thumbprint provided
-                    if (e.Certificate.RawData != null &&
-                        id.Connection.Endpoint.Certificate != null &&
-                        e.Certificate.Thumbprint == id.Connection.Endpoint.Certificate) {
-                        // Validate
-                        e.Accept = true;
-                    }
-                    else if(_clientConfig.AutoAcceptUntrustedCertificates) {
-                        _logger.Warning("Publisher is configured to accept untrusted certs.  " +
-                            "Accepting untrusted certificate on endpoint {endpointUrl}",
-                            endpointUrl);
-                        e.Accept = true;
-                    }
-                }
-            };
-
-            var applicationConfiguration = await _clientConfig.
-                ToApplicationConfigurationAsync(_identity, true, OnValidate);
-            var endpointConfiguration = _clientConfig.ToEndpointConfiguration();
+        private async Task<Session> CreateSessionAsync(string endpointUrl, ConnectionIdentifier id,
+            SessionWrapper wrapper) {
+            var sessionName = $"Azure IIoT {id}";
 
             var endpointDescription = SelectEndpoint(endpointUrl,
                 id.Connection.Endpoint.SecurityMode, id.Connection.Endpoint.SecurityPolicy,
@@ -181,97 +620,72 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
             }
 
             var configuredEndpoint = new ConfiguredEndpoint(
-                null, endpointDescription, endpointConfiguration);
+                null, endpointDescription, _endpointConfiguration);
 
-            _logger.Information("Trying to create session {sessionName}...",
-                sessionName);
+            _logger.Information("Creating session '{id}' for endpoint '{endpointUrl}'...", id, endpointUrl);
             using (new PerfMarker(_logger, sessionName)) {
                 var userIdentity = id.Connection.User.ToStackModel() ??
                     new UserIdentity(new AnonymousIdentityToken());
                 var session = await Session.Create(
-                    applicationConfiguration, configuredEndpoint,
+                    _applicationConfiguration, configuredEndpoint,
                     true, sessionName, _clientConfig.DefaultSessionTimeout,
-                    userIdentity, null);
+                    userIdentity, null).ConfigureAwait(false);
+                session.Handle = wrapper;
+                wrapper.Session = session;
 
+                session.KeepAliveInterval = _clientConfig.KeepAliveInterval > 0 ?
+                    _clientConfig.KeepAliveInterval : kDefaultOperationTimeout;
+
+                session.KeepAlive += Session_KeepAlive;
+                session.Notification += Session_Notification;
+
+
+                // TODO - store the created session id (node id)?
                 if (sessionName != session.SessionName) {
-                    _logger.Warning("Session '{sessionName}' created with a revised name '{name}'",
-                        sessionName, session.SessionName);
+                    _logger.Warning("Session '{id}' created with a revised name '{name}'",
+                        id, session.SessionName);
                 }
-                _logger.Information("Session '{sessionName}' created.", sessionName);
-                
-                _logger.Information("Loading Complex Type System....");
+                _logger.Information("Session '{id}' created, loading complex type system ... ", id);
                 try {
                     var complexTypeSystem = new ComplexTypeSystem(session);
-                    await complexTypeSystem.Load();
-                    _logger.Information("Complex Type system loaded.");
+                    await complexTypeSystem.Load().ConfigureAwait(false);
+                    _logger.Information("Session '{id}' complex type system loaded", id);
                 }
                 catch (Exception ex) {
-                    _logger.Error(ex, "Failed to load Complex Type System");
+                    _logger.Error(ex, "Failed to load complex type system for session '{id}'", id);
                 }
 
-                if (_clientConfig.KeepAliveInterval > 0) {
-                    session.KeepAliveInterval = _clientConfig.KeepAliveInterval;
-                    session.KeepAlive += Session_KeepAlive;
-                    session.Notification += Session_Notification;
-                }
-                var wrapper = new SessionWrapper {
-                    MissedKeepAlives = 0,
-                    MaxKeepAlives = _clientConfig.MaxKeepAliveCount,
-                    Session = session
-                };
-                return wrapper;
+                return session;
             }
         }
 
-        /// <inheritdoc/>
-        public async Task RemoveSessionAsync(ConnectionModel connection, bool onlyIfEmpty = true) {
-            var key = new ConnectionIdentifier(connection);
-            await _lock.WaitAsync();
-            try {
-                if (!_sessions.TryGetValue(key, out var wrapper) || wrapper?.Session == null) {
-                    return;
-                }
-                var session = wrapper.Session;
-                if (onlyIfEmpty && session.SubscriptionCount > 0) {
-                    return;
-                }
-                _sessions.Remove(key);
-
-                // Remove subscriptions
-                if (session.SubscriptionCount > 0) {
-                    foreach (var subscription in session.Subscriptions){
-                        Try.Op(() => subscription.RemoveItems(subscription.MonitoredItems));
-                        Try.Op(() => subscription.DeleteItems());
-                    }
-                    Try.Op(() => session.RemoveSubscriptions(session.Subscriptions));
-                }
-                Try.Op(session.Close);
-                Try.Op(session.Dispose);
-            }
-            finally {
-                _lock.Release();
-            }
-        }
         /// <summary>
         /// callback to report session's notifications
         /// </summary>
         /// <param name="session"></param>
         /// <param name="e"></param>
         private void Session_Notification(Session session, NotificationEventArgs e) {
-            _logger.Debug("Notification for session: {Session}, subscription {Subscription} -sequence# {Sequence}-{PublishTime}",
-                session.SessionName, e.Subscription?.DisplayName, e.NotificationMessage?.SequenceNumber,
-                e.NotificationMessage.PublishTime);
-            if (e.NotificationMessage.IsEmpty || e.NotificationMessage.NotificationData.Count() == 0) {
-                var keepAlive = new DataChangeNotification() {
-                    MonitoredItems = new MonitoredItemNotificationCollection() {
+
+            try {
+                _logger.Debug("Notification for session '{id}', subscription '{displayName}' - sequence# {sequence}-{publishTime}",
+                    session?.Handle is SessionWrapper wrapper ? wrapper?.Id : session?.SessionName,
+                    e.Subscription?.DisplayName, e?.NotificationMessage?.SequenceNumber,
+                    e.NotificationMessage?.PublishTime);
+                if (e.NotificationMessage.IsEmpty || e.NotificationMessage.NotificationData.Count() == 0) {
+                    var keepAlive = new DataChangeNotification() {
+                        MonitoredItems = new MonitoredItemNotificationCollection() {
                         new MonitoredItemNotification() {
                             ClientHandle = 0,
                             Value = null,
                             Message = e.NotificationMessage
                         }
                     }
-                };
-                e.Subscription.FastDataChangeCallback.Invoke(e.Subscription, keepAlive, e.StringTable);
+                    };
+                    e.Subscription.FastDataChangeCallback.Invoke(e.Subscription, keepAlive, e.StringTable);
+                }
+            }
+            catch (Exception ex) {
+                _logger.Error(ex, "Failed to process notifications for session '{name}'", session.SessionName);
             }
         }
 
@@ -281,44 +695,48 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
         /// <param name="session"></param>
         /// <param name="e"></param>
         private void Session_KeepAlive(Session session, KeepAliveEventArgs e) {
-            _logger.Debug("Keep Alive received from session {name}, state: {state}.",
-                session.SessionName, e.CurrentState);
-            _lock.Wait();
+
             try {
-                foreach (var entry in _sessions
-                    .Where(s => s.Value.Session.SessionId == session.SessionId).ToList()) {
+                if (session?.Handle is SessionWrapper wrapper) {
+
+                    _logger.Debug("Keepalive received from session '{id}': server current state: {state}",
+                        wrapper.Id, e.CurrentState);
+
                     if (ServiceResult.IsGood(e.Status)) {
-                        entry.Value.MissedKeepAlives = 0;
+                        wrapper.MissedKeepAlives = 0;
+
+                        if (!wrapper._subscriptions.Any()) {
+                            if (wrapper.IdleCount < wrapper.MaxKeepAlives) {
+                                wrapper.IdleCount++;
+                            }
+                            else {
+                                _logger.Information("Idle session '{id}' set to disconnect due to idle", wrapper.Id);
+                                wrapper.State = SessionState.Disconnect;
+                                TriggerKeepAlive();
+                            }
+                        }
+                        else {
+                            wrapper.IdleCount = 0;
+                        }
                     }
                     else {
-                        entry.Value.MissedKeepAlives++;
-                        if (entry.Value.MissedKeepAlives >= entry.Value.MaxKeepAlives) {
-                            _logger.Warning("Session '{name}' exceeded max keep alive count. " +
-                                "Disconnecting and removing session...", session.SessionName);
-                            // TODO - implement a session level retry mechanism.
-                            // for now rely on the subscription's reconnection logic
-                            /*
-                            _sessions.Remove(entry.Key);
-                            // Remove subscriptions
-                            if (session.SubscriptionCount > 0) {
-                                foreach (var subscription in session.Subscriptions) {
-                                    Try.Op(() => subscription.RemoveItems(subscription.MonitoredItems));
-                                    Try.Op(() => subscription.DeleteItems());
-                                }
-                                Try.Op(() => session.RemoveSubscriptions(session.Subscriptions));
-                            }
-                            Try.Op(session.Close);
-                            Try.Op(session.Dispose);
-                            */
+                        wrapper.ReportedStatus = e.Status.Code;
+                        _logger.Information("Session '{id}' set to refresh due to Keepalive with reported status {status}",
+                            wrapper.Id, e.Status);
+                        if (wrapper.State == SessionState.Running) {
+                            wrapper.State = SessionState.Refresh;
                         }
-                        _logger.Warning("{missedKeepAlives}/{_maxKeepAlives} missed keep " +
-                            "alives from session '{name}'...",
-                            entry.Value.MissedKeepAlives, entry.Value.MaxKeepAlives, session.SessionName);
+                        TriggerKeepAlive();
                     }
                 }
+                else {
+                    _logger.Warning("Keepalive received from unidentified session '{name}', server current state is {state}",
+                        session?.SessionName, e.CurrentState);
+
+                }
             }
-            finally {
-                _lock.Release();
+            catch (Exception ex) {
+                _logger.Error(ex, "Failed to process Keepalive for session '{name}'", session.SessionName);
             }
         }
 
@@ -328,7 +746,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
             }
             switch (securityMode.Value) {
                 case SecurityMode.Best:
-                    throw new NotSupportedException("The security mode 'best' is not supported.");
+                    throw new NotSupportedException("The security mode 'best' is not supported");
                 case SecurityMode.None:
                     return MessageSecurityMode.None;
                 case SecurityMode.Sign:
@@ -336,7 +754,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
                 case SecurityMode.SignAndEncrypt:
                     return MessageSecurityMode.SignAndEncrypt;
                 default:
-                    throw new NotSupportedException($"The security mode '{securityMode}' is not implemented.");
+                    throw new NotSupportedException($"The security mode '{securityMode}' is not implemented");
             }
         }
 
@@ -422,6 +840,10 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
         private sealed class SessionWrapper {
 
             /// <summary>
+            /// Session's identifier
+            /// </summary>
+            public string Id { get; set; }
+            /// <summary>
             /// Session
             /// </summary>
             public Session Session { get; set; }
@@ -434,7 +856,50 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
             /// <summary>
             /// Missed keep alives
             /// </summary>
-            public uint MaxKeepAlives { get; set; }
+            public int MaxKeepAlives { get; set; }
+
+            /// <summary>
+            /// the number of connect retries
+            /// </summary>
+            public int NumberOfConnectRetries { get; set; }
+
+            /// <summary>
+            /// Reconnecting
+            /// </summary>
+            public SessionState State { get; set; }
+
+            /// <summary>
+            /// Error status notified
+            /// </summary>
+            public StatusCode ReportedStatus { get; set; }
+
+            /// <summary>
+            /// Idle counter
+            /// </summary>
+            public int IdleCount { get; set; }
+
+            /// <summary>
+            /// currently processing
+            /// </summary>
+            public Task Processing { get; set; }
+
+            /// <summary>
+            /// registered subscriptions
+            /// </summary>
+            public ConcurrentDictionary<string, ISubscription> _subscriptions { get; }
+                = new ConcurrentDictionary<string, ISubscription>();
+        }
+
+        /// <summary>
+        /// The Session state
+        /// </summary>
+        private enum SessionState {
+            Init,
+            Failed,
+            Running,
+            Refresh,
+            Retry,
+            Disconnect
         }
 
         /// <summary>
@@ -463,6 +928,13 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
             return new EndpointIdentifier(endpointModel);
         }
 
+        /// <summary>
+        /// Triggers the keep alive runner immediate execution
+        /// </summary>
+        private void TriggerKeepAlive() {
+            _triggerKeepAlive?.TrySetResult(true);
+        }
+
         private readonly ILogger _logger;
         private readonly IClientServicesConfig _clientConfig;
         private readonly IIdentity _identity;
@@ -470,5 +942,13 @@ namespace Microsoft.Azure.IIoT.OpcUa.Protocol.Services {
             new Dictionary<ConnectionIdentifier, SessionWrapper>();
         private readonly SemaphoreSlim _lock;
         private const int kDefaultOperationTimeout = 15000;
+
+
+        private readonly Task _runner;
+        private readonly CancellationTokenSource _cts;
+        private TaskCompletionSource<bool> _triggerKeepAlive;
+
+        private readonly ApplicationConfiguration _applicationConfiguration;
+        private readonly EndpointConfiguration _endpointConfiguration;
     }
 }

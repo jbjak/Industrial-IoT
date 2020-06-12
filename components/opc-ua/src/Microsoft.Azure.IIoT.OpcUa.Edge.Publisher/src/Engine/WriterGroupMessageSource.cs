@@ -22,19 +22,19 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
     /// <summary>
     /// Triggers dataset writer messages on subscription changes
     /// </summary>
-    public class WriterGroupMessageTrigger : IMessageTrigger {
+    public class WriterGroupMessageTrigger : IMessageTrigger, IDisposable {
         /// <inheritdoc/>
         public string Id => _writerGroup.WriterGroupId;
 
         /// <inheritdoc/>
-        public long NumberOfConnectionRetries => _subscriptions.Where(sc => sc.Subscription != null)
-            .Select(sc => sc.Subscription).Sum(sc => sc.NumberOfConnectionRetries);
+        public int NumberOfConnectionRetries => _subscriptions?.FirstOrDefault()?.
+            Subscription?.NumberOfConnectionRetries ?? 0;
 
         /// <inheritdoc/>
-        public long ValueChangesCount { get; private set; } = 0;
-        
+        public int ValueChangesCount { get; private set; } = 0;
+
         /// <inheritdoc/>
-        public long DataChangesCount { get; private set; } = 0;
+        public int DataChangesCount { get; private set; } = 0;
 
         /// <inheritdoc/>
         public event EventHandler<DataSetMessageModel> OnMessage;
@@ -62,16 +62,18 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
         /// <inheritdoc/>
         public async Task RunAsync(CancellationToken ct) {
 
-            foreach (var subscription in _subscriptions) {
-                await subscription.OpenAsync(ct);
+            _subscriptions.ForEach(sc => sc.OpenAsync().Wait());
+            _subscriptions.ForEach(sc => sc.ActivateAsync(ct).Wait());
+            try {
+                await Task.Delay(-1, ct).ConfigureAwait(false);
             }
-
-            foreach (var subscription in _subscriptions) {
-                await subscription.ActivateAsync(ct);
+            finally {
+                _subscriptions.ForEach(sc => sc.DeactivateAsync().Wait());
             }
+        }
 
-            await Task.Delay(-1, ct); // TODO - add managemnt of subscriptions, etc.
-
+        /// <inheritdoc/>
+        public void Dispose() {
             _subscriptions.ForEach(sc => sc.Dispose());
             _subscriptions.Clear();
         }
@@ -123,20 +125,18 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
             /// <summary>
             /// Open subscription
             /// </summary>
-            /// <param name="ct"></param>
             /// <returns></returns>
-            public async Task OpenAsync(CancellationToken ct) {
-                
+            public async Task OpenAsync() {
                 if (Subscription != null) {
                     _outer._logger.Warning("Subscription already exists");
                     return;
                 }
 
                 var sc = await _outer._subscriptionManager.GetOrCreateSubscriptionAsync(
-                    _subscriptionInfo);
+                    _subscriptionInfo).ConfigureAwait(false);
                 sc.OnSubscriptionChange += OnSubscriptionChangedAsync;
                 await sc.ApplyAsync(_subscriptionInfo.MonitoredItems,
-                    _subscriptionInfo.Configuration, false);
+                    _subscriptionInfo.Configuration).ConfigureAwait(false);
                 Subscription = sc;
             }
 
@@ -150,9 +150,11 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
                     _outer._logger.Warning("Subscription not registered");
                     return;
                 }
-
-                await Subscription.ApplyAsync(_subscriptionInfo.MonitoredItems,
-                    _subscriptionInfo.Configuration, true);
+                // only try to activate if already enabled. Otherwise the activation
+                // will be handled by the session's keep alive mechanism
+                if (Subscription.Enabled) {
+                    await Subscription.ActivateAsync(null).ConfigureAwait(false);
+                }
 
                 if (_keyframeTimer != null) {
                     ct.Register(() => _keyframeTimer.Stop());
@@ -168,17 +170,15 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
             /// <summary>
             /// deactivate a subscription
             /// </summary>
-            /// <param name="ct"></param>
             /// <returns></returns>
-            public async Task DeactivateAsync(CancellationToken ct) {
-                
+            public async Task DeactivateAsync() {
+
                 if (Subscription == null) {
                     _outer._logger.Warning("Subscription not registered");
                     return;
                 }
 
-                await Subscription.ApplyAsync(_subscriptionInfo.MonitoredItems,
-                    _subscriptionInfo.Configuration, false);
+                await Subscription.CloseAsync().ConfigureAwait(false);
 
                 if (_keyframeTimer != null) {
                     _keyframeTimer.Stop();
@@ -193,7 +193,6 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
             /// <inheritdoc/>
             public void Dispose() {
                 if (Subscription != null) {
-                    Subscription.ApplyAsync(null,_subscriptionInfo.Configuration, false);
                     Subscription.OnSubscriptionChange -= OnSubscriptionChangedAsync;
                     Subscription.Dispose();
                 }
@@ -213,7 +212,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
 
                     _outer._logger.Debug("Insert keyframe message...");
                     var sequenceNumber = (uint)Interlocked.Increment(ref _currentSequenceNumber);
-                    var snapshot = await Subscription.GetSnapshotAsync();
+                    var snapshot = await Subscription.GetSnapshotAsync().ConfigureAwait(false);
                     if (snapshot != null) {
                         CallMessageReceiverDelegates(this, sequenceNumber, snapshot);
                     }
@@ -245,7 +244,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
                 var sequenceNumber = (uint)Interlocked.Increment(ref _currentSequenceNumber);
                 if (_keyFrameCount.HasValue && _keyFrameCount.Value != 0 &&
                     (sequenceNumber % _keyFrameCount.Value) == 0) {
-                    var snapshot = await Try.Async(() => Subscription.GetSnapshotAsync());
+                    var snapshot = await Try.Async(() => Subscription.GetSnapshotAsync()).ConfigureAwait(false);
                     if (snapshot != null) {
                         notification = snapshot;
                     }
@@ -270,7 +269,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
                         SequenceNumber = sequenceNumber,
                         ApplicationUri = notification.ApplicationUri,
                         EndpointUrl = notification.EndpointUrl,
-                        TimeStamp = DateTime.UtcNow,
+                        TimeStamp = notification.Timestamp,
                         PublisherId = _outer._publisherId,
                         Writer = _dataSetWriter,
                         WriterGroup = _outer._writerGroup
@@ -278,7 +277,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
                     lock (_lock) {
                         if (_outer.DataChangesCount >= kNumberOfInvokedMessagesResetThreshold ||
                             _outer.ValueChangesCount >= kNumberOfInvokedMessagesResetThreshold) {
-                            // reset both 
+                            // reset both
                             _outer._logger.Debug("Notifications counter has been reset to prevent overflow. " +
                                 "So far, {DataChangesCount} data changes and {ValueChangesCount}" +
                                 " value changes were invoked by message source.",
@@ -313,6 +312,6 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
         private readonly List<DataSetWriterSubscription> _subscriptions;
         private readonly WriterGroupModel _writerGroup;
         private readonly ISubscriptionManager _subscriptionManager;
-        private const long kNumberOfInvokedMessagesResetThreshold = long.MaxValue - 10000;
+        private const int kNumberOfInvokedMessagesResetThreshold = int.MaxValue - 10000;
     }
 }

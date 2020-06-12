@@ -15,6 +15,7 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher {
     using Microsoft.Azure.IIoT.OpcUa.Api.Publisher.Clients;
     using Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine;
     using Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Models;
+    using Microsoft.Azure.IIoT.OpcUa.Protocol;
     using Microsoft.Azure.IIoT.OpcUa.Protocol.Services;
     using Microsoft.Azure.IIoT.Agent.Framework;
     using Microsoft.Azure.IIoT.Hub;
@@ -94,25 +95,26 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher {
                     var logger = hostScope.Resolve<ILogger>();
                     var moduleConfig = hostScope.Resolve<IModuleConfig>();
                     var identity = hostScope.Resolve<IIdentity>();
-                    logger.Information("Initiating prometheus at port {0}/metrics", kPublisherPrometheusPort);
+                    ISessionManager sessionManager = null;
                     var server = new MetricServer(port: kPublisherPrometheusPort);
                     try {
-
-                        server.StartWhenEnabled(moduleConfig, logger);
                         var version = GetType().Assembly.GetReleaseVersion().ToString();
+                        logger.Information("Starting module OpcPublisher version {version}.", version);
+                        logger.Information("Initiating prometheus at port {0}/metrics", kPublisherPrometheusPort);
+                        server.StartWhenEnabled(moduleConfig, logger);
                         // Start module
-                        kPublisherModuleStart.WithLabels(
-                            identity.DeviceId ?? "", identity.ModuleId ?? "").Inc();
                         await module.StartAsync(IdentityType.Publisher, SiteId,
                             "OpcPublisher", version, this);
+                        kPublisherModuleStart.WithLabels(
+                            identity.DeviceId ?? "", identity.ModuleId ?? "").Inc();
                         await workerSupervisor.StartAsync();
+                        sessionManager = hostScope.Resolve<ISessionManager>();
                         OnRunning?.Invoke(this, true);
                         await Task.WhenAny(_reset.Task, _exit.Task);
                         if (_exit.Task.IsCompleted) {
                             logger.Information("Module exits...");
                             return _exitCode;
                         }
-
                         _reset = new TaskCompletionSource<bool>();
                         logger.Information("Module reset...");
                     }
@@ -120,12 +122,13 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher {
                         logger.Error(ex, "Error during module execution - restarting!");
                     }
                     finally {
+                        await workerSupervisor.StopAsync();
+                        await sessionManager?.StopAsync();
+                        await module.StopAsync();
+                        OnRunning?.Invoke(this, false);
                         kPublisherModuleStart.WithLabels(
                             identity.DeviceId ?? "", identity.ModuleId ?? "").Set(0);
-                        await workerSupervisor.StopAsync();
-                        await module.StopAsync();
                         server.StopWhenEnabled(moduleConfig, logger);
-                        OnRunning?.Invoke(this, false);
                     }
                 }
             }
@@ -137,6 +140,7 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher {
         /// <param name="configuration"></param>
         /// <returns></returns>
         private IContainer ConfigureContainer(IConfiguration configuration) {
+
             var config = new Config(configuration);
             var builder = new ContainerBuilder();
             var legacyCliOptions = new LegacyCliOptions(configuration);

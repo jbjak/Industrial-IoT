@@ -55,13 +55,6 @@
                 "description": "Specifies the object ID of a principal in your Azure Active Directory tenant to access keyvault."
             }
         },
-        "datalakeServicePrincipalId": {
-            "type": "string",
-            "defaultValue": "",
-            "metadata": {
-                "description": "Specifies the object ID of a principal in your Azure Active Directory tenant to access datalake if deployed."
-            }
-        },
         "authorityUri": {
             "type": "string",
             "defaultValue": "https://login.microsoftonline.com",
@@ -160,7 +153,14 @@
             "type": "string",
             "defaultValue": "",
             "metadata": {
-                "description": "The size of VMs to provision for simulation."
+                "description": "The size of the gateway VM to provision."
+            }
+        },
+        "simulationVmSize": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The size of the simulation VM to provision."
             }
         },
         "edgeUserName": {
@@ -211,6 +211,13 @@
             "metadata": {
                 "description": "Specifies the image version tag to use for all container images."
             }
+        },
+        "tags": {
+            "type": "object",
+            "defaultValue": {},
+            "metadata": {
+                "description": "Tags for Azure resources."
+            }
         }
     },
     "variables": {
@@ -232,7 +239,7 @@
         {
             "comments": "Deploy minimum required Azure Infrastructure for Industrial IoT.",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2017-05-10",
+            "apiVersion": "2019-08-01",
             "name": "[variables('minimumInfrastructureResourceName')]",
             "properties": {
                 "mode": "Incremental",
@@ -245,6 +252,9 @@
                     },
                     "keyVaultPrincipalId": {
                         "value": "[parameters('keyVaultPrincipalId')]"
+                    },
+                    "tags": {
+                        "value": "[parameters('tags')]"
                     }
                 },
                 "templateLink": {
@@ -256,7 +266,7 @@
         {
             "comments": "Save auth configuration in keyVault.",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2017-05-10",
+            "apiVersion": "2019-08-01",
             "name": "[variables('authConfigurationResourcName')]",
             "properties": {
                 "mode": "Incremental",
@@ -327,6 +337,9 @@
                                 "value": "[parameters('imagesNamespace')]"
                             }
                         ]
+                    },
+                    "tags": {
+                        "value": "[parameters('tags')]"
                     }
                 },
                 "templateLink": {
@@ -341,7 +354,7 @@
         {
             "comments": "Deploy Azure Infrastructure required by the full Industrial IoT Platform.",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2017-05-10",
+            "apiVersion": "2019-08-01",
             "name": "[variables('standardInfrastructureResourceName')]",
             "condition": "[variables('standardInfrastructureDeployment')]",
             "properties": {
@@ -352,9 +365,6 @@
                     },
                     "branchName": {
                         "value": "[parameters('branchName')]"
-                    },
-                    "datalakeServicePrincipalId": {
-                        "value": "[if(not(empty(parameters('datalakeServicePrincipalId'))), parameters('datalakeServicePrincipalId'), reference(variables('minimumInfrastructureResourceId')).outputs.managedIdentityPrincipalId.value)]"
                     },
                     "keyVaultName": {
                         "value": "[reference(variables('minimumInfrastructureResourceId')).outputs.keyVaultName.value]"
@@ -389,6 +399,9 @@
                             },
                             "secretName": "pcs-storage-key"
                         }
+                    },
+                    "tags": {
+                        "value": "[parameters('tags')]"
                     }
                 },
                 "templateLink": {
@@ -403,7 +416,7 @@
         {
             "comments": "Deploy Azure Industrial IoT platform.",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2017-05-10",
+            "apiVersion": "2019-08-01",
             "name": "[variables('platformResourcName')]",
             "condition": "[variables('platformDeployment')]",
             "properties": {
@@ -453,6 +466,9 @@
                     },
                     "imagesTag": {
                         "value": "[parameters('imagesTag')]"
+                    },
+                    "tags": {
+                        "value": "[parameters('tags')]"
                     }
                 },
                 "templateLink": {
@@ -467,7 +483,7 @@
         {
             "comments": "Deploy Azure Industrial IoT Edge simulation.",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2017-05-10",
+            "apiVersion": "2019-08-01",
             "name": "[variables('simulationResourcName')]",
             "condition": "[variables('simulationDeployment')]",
             "properties": {
@@ -487,6 +503,9 @@
                     },
                     "edgeVmSize": {
                         "value": "[parameters('edgeVmSize')]"
+                    },
+                    "simulationVmSize": {
+                        "value": "[parameters('simulationVmSize')]"  
                     },
                     "edgeUserName": {
                         "value": "[parameters('edgeUserName')]"
@@ -520,6 +539,9 @@
                     },
                     "imagesTag": {
                         "value": "[parameters('imagesTag')]"
+                    },
+                    "tags": {
+                        "value": "[parameters('tags')]"
                     }
                 },
                 "templateLink": {

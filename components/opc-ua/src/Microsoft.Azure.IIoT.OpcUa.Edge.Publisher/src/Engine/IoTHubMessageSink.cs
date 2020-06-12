@@ -15,6 +15,8 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
     using System.Collections.Generic;
     using System.Diagnostics;
     using Prometheus;
+    using Microsoft.Azure.IIoT.Module;
+    using System.Globalization;
 
     /// <summary>
     /// Iot hub client sink
@@ -57,25 +59,30 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
                     _logger.Debug("Message counter has been reset to prevent overflow. " +
                         "So far, {SentMessagesCount} messages has been sent to IoT Hub.",
                         SentMessagesCount);
-                    kMessagesSent.Set(SentMessagesCount);
+                    kMessagesSent.WithLabels(IotHubMessageSinkGuid, IotHubMessageSinkStartTime).Set(SentMessagesCount);
                     SentMessagesCount = 0;
                 }
-                using(kSendingDuration.NewTimer()) {
+                using (kSendingDuration.NewTimer()) {
                     var sw = new Stopwatch();
                     sw.Start();
 
-                    if (messagesCount == 1) {
-                        await _clientAccessor.Client.SendEventAsync(messageObjects.First());
+                    try {
+                        if (messagesCount == 1) {
+                            await _clientAccessor.Client.SendEventAsync(messageObjects.First()).ConfigureAwait(false);
+                        }
+                        else {
+                            await _clientAccessor.Client.SendEventBatchAsync(messageObjects).ConfigureAwait(false);
+                        }
                     }
-                    else {
-                        await _clientAccessor.Client.SendEventBatchAsync(messageObjects);
+                    catch (Exception e) {
+                        _logger.Error(e, "Error sending message(s) to IoT Hub");
                     }
 
                     sw.Stop();
                     _logger.Verbose("Sent {count} messages in {time} to IoTHub.", messagesCount, sw.Elapsed);
                 }
                 SentMessagesCount += messagesCount;
-                kMessagesSent.Set(SentMessagesCount);
+                kMessagesSent.WithLabels(IotHubMessageSinkGuid, IotHubMessageSinkStartTime).Set(SentMessagesCount);
             }
             catch (Exception ex) {
                 _logger.Error(ex, "Error while sending messages to IoT Hub."); // we do not set the block into a faulted state.
@@ -99,7 +106,7 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
             var msg = new Message(body) {
                 ContentType = contentType,
                 ContentEncoding = contentEncoding,
-                // TODO - setting CreationTime causes issues in the Azure IoT java SDK 
+                // TODO - setting CreationTime causes issues in the Azure IoT java SDK
                 //  revert the comment whrn the issue is fixed
                 //  CreationTimeUtc = DateTime.UtcNow
             };
@@ -118,9 +125,15 @@ namespace Microsoft.Azure.IIoT.OpcUa.Edge.Publisher.Engine {
         private const long kMessageCounterResetThreshold = long.MaxValue - 10000;
         private readonly ILogger _logger;
         private readonly IClientAccessor _clientAccessor;
-        private static readonly Gauge kMessagesSent =
-            Metrics.CreateGauge("iiot_edge_publisher_messages", "Number of messages sent to IotHub");
-        private static readonly Histogram kSendingDuration =
-            Metrics.CreateHistogram("iiot_edge_publisher_messages_duration", "Histogram of message sending durations");
+        private readonly string IotHubMessageSinkGuid = Guid.NewGuid().ToString();
+        private readonly string IotHubMessageSinkStartTime = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK",
+                        CultureInfo.InvariantCulture);
+        private static readonly Gauge kMessagesSent = Metrics.CreateGauge(
+            "iiot_edge_publisher_messages", "Number of messages sent to IotHub",
+                new GaugeConfiguration {
+                    LabelNames = new[] { "runid", "timestamp_utc" }
+                });
+        private static readonly Histogram kSendingDuration = Metrics.CreateHistogram(
+            "iiot_edge_publisher_messages_duration", "Histogram of message sending durations");
     }
 }

@@ -44,7 +44,14 @@
             "type": "string",
             "defaultValue": "",
             "metadata": {
-                "description": "The size of VMs to provision for simulation."
+                "description": "The size of the gateway VM to provision."
+            }
+        },
+        "simulationVmSize": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The size of the simulation VM to provision."
             }
         },
         "edgeUserName": {
@@ -121,6 +128,13 @@
             "metadata": {
                 "description": "Specifies the image version tag to use for all images."
             }
+        },
+        "tags": {
+            "type": "object",
+            "defaultValue": {},
+            "metadata": {
+                "description": "Tags for Azure resources."
+            }
         }
     },
     "variables": {
@@ -131,7 +145,7 @@
         {
             "comments": "Deploy linux edge gateway and factory network simulation.",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2017-05-10",
+            "apiVersion": "2019-08-01",
             "name": "[concat('simulation.linux.', copyIndex())]",
             "condition": "[not(equals(0, parameters('numberOfLinuxGateways')))]",
             "copy": {
@@ -184,6 +198,9 @@
                     "edgeVmSize": {
                         "value": "[parameters('edgeVmSize')]"  
                     },
+                    "simulationVmSize": {
+                        "value": "[parameters('simulationVmSize')]"  
+                    },
                     "dpsIdScope": {
                         "reference": {
                             "keyVault": {
@@ -202,6 +219,9 @@
                     },
                     "managedIdentityResourceId": {
                         "value": "[parameters('managedIdentityResourceId')]"
+                    },
+                    "tags": {
+                        "value": "[parameters('tags')]"
                     }
                 },
                 "templateLink": {
@@ -215,7 +235,7 @@
         {
             "comments": "Deploy windows edge gateway and factory network simulation.",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2017-05-10",
+            "apiVersion": "2019-08-01",
             "name": "[concat('simulation.windows.', copyIndex())]",
             "condition": "[not(equals(0, parameters('numberOfWindowsGateways')))]",
             "copy": {
@@ -268,6 +288,9 @@
                     "edgeVmSize": {
                         "value": "[parameters('edgeVmSize')]"  
                     },
+                    "simulationVmSize": {
+                        "value": "[parameters('simulationVmSize')]"  
+                    },
                     "dpsIdScope": {
                         "reference": {
                             "keyVault": {
@@ -286,6 +309,9 @@
                     },
                     "managedIdentityResourceId": {
                         "value": "[parameters('managedIdentityResourceId')]"
+                    },
+                    "tags": {
+                        "value": "[parameters('tags')]"
                     }
                 },
                 "templateLink": {
@@ -299,7 +325,7 @@
         {
             "comments": "Save edge simulation user and password.",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2017-05-10",
+            "apiVersion": "2019-08-01",
             "name": "[variables('simulationConfigurationResourceName')]",
             "condition": "[and(not(empty(parameters('keyVaultName'))), or(not(equals(0, parameters('numberOfLinuxGateways'))), not(equals(0, parameters('numberOfWindowsGateways')))))]",
             "properties": {
@@ -319,6 +345,9 @@
                                 "value": "[parameters('edgePassword')]"
                             }
                         ]
+                    },
+                    "tags": {
+                        "value": "[parameters('tags')]"
                     }
                 },
                 "templateLink": {
