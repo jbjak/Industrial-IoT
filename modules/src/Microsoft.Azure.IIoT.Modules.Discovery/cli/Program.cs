@@ -14,6 +14,7 @@ namespace Microsoft.Azure.IIoT.Modules.Discovery.Cli {
     using Microsoft.Azure.IIoT.Serializers;
     using Microsoft.Azure.IIoT.Serializers.NewtonSoft;
     using Microsoft.Extensions.Configuration;
+    using Opc.Ua;
     using Serilog.Events;
     using Serilog;
     using System;
@@ -32,7 +33,7 @@ namespace Microsoft.Azure.IIoT.Modules.Discovery.Cli {
         /// Entry point
         /// </summary>
         public static void Main(string[] args) {
-            bool verbose = false;
+            var verbose = false;
             string deviceId = null, moduleId = null;
             Console.WriteLine("Discovery module command line interface.");
             var configuration = new ConfigurationBuilder()
@@ -78,7 +79,7 @@ namespace Microsoft.Azure.IIoT.Modules.Discovery.Cli {
                 }
                 config = connectionString.ToIoTHubConfig();
                 if (deviceId == null) {
-                    deviceId = Dns.GetHostName();
+                    deviceId = Utils.GetHostName();
                     Console.WriteLine($"Using <deviceId> '{deviceId}'");
                 }
                 if (moduleId == null) {
@@ -147,7 +148,7 @@ Options:
             var registry = new IoTHubServiceHttpClient(new HttpClient(logger),
                 config, new NewtonSoftJsonSerializer(), logger);
             try {
-                await registry.CreateAsync(new DeviceTwinModel {
+                await registry.CreateOrUpdateAsync(new DeviceTwinModel {
                     Id = deviceId,
                     Tags = new Dictionary<string, VariantValue> {
                         [TwinProperty.Type] = IdentityType.Gateway
@@ -161,7 +162,7 @@ Options:
                 logger.Information("Gateway {deviceId} exists.", deviceId);
             }
             try {
-                await registry.CreateAsync(new DeviceTwinModel {
+                await registry.CreateOrUpdateAsync(new DeviceTwinModel {
                     Id = deviceId,
                     ModuleId = moduleId
                 }, false, CancellationToken.None);

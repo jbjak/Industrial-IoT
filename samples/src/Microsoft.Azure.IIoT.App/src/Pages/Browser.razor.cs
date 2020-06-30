@@ -14,6 +14,7 @@ namespace Microsoft.Azure.IIoT.App.Pages {
     using Microsoft.Azure.IIoT.OpcUa.Api.Publisher;
     using Microsoft.Azure.IIoT.OpcUa.Api.Publisher.Models;
     using Microsoft.Azure.IIoT.App.Models;
+    using Microsoft.Azure.IIoT.OpcUa.Api.Registry.Models;
 
     public partial class Browser {
         [Parameter]
@@ -33,11 +34,11 @@ namespace Microsoft.Azure.IIoT.App.Pages {
 
         public PagedResult<ListNode> NodeList { get; set; } = new PagedResult<ListNode>();
         public PagedResult<ListNode> PagedNodeList { get; set; } = new PagedResult<ListNode>();
-        public PagedResult<PublishedItemApiModel> PublishedNodes { get; set; } = new PagedResult<PublishedItemApiModel>();
+        public PagedResult<ListNode> PublishedNodes { get; set; } = new PagedResult<ListNode>();
         public CredentialModel Credential { get; set; } = new CredentialModel();
         public bool IsOpen { get; set; } = false;
         public ListNode NodeData { get; set; }
-        public string EndpointUrl { get; set; } = null;
+        public EndpointInfoApiModel EndpointModel { get; set; } 
         private IAsyncDisposable PublishEvent { get; set; }
         private string _tableView = "visible";
         private string _tableEmpty = "displayNone";
@@ -83,8 +84,7 @@ namespace Microsoft.Azure.IIoT.App.Pages {
         /// <param name="firstRender"></param>
         protected override async Task OnAfterRenderAsync(bool firstRender) {
             if (firstRender) {
-                var endpoint = await registryService.GetEndpointAsync(EndpointId);
-                EndpointUrl = endpoint?.Registration?.EndpointUrl;
+                EndpointModel = await registryService.GetEndpointAsync(EndpointId);
                 Credential = await GetSecureItemAsync<CredentialModel>(CommonHelper.CredentialKey);
                 await BrowseTreeAsync(BrowseDirection.Forward, 0, true, FirstPage, string.Empty, new List<string>());
                 CommonHelper.Spinner = string.Empty;
@@ -143,14 +143,14 @@ namespace Microsoft.Azure.IIoT.App.Pages {
                                                 NodeList);
             }
 
-            PublishedNodes = await Publisher.PublishedAsync(EndpointId);
+            PublishedNodes = await Publisher.PublishedAsync(EndpointId, false);
 
             foreach (var node in NodeList.Results) {
                 if (node.NodeClass == NodeClass.Variable) {
                     // check if publishing enabled
-                    foreach (var publishedItem in PublishedNodes.Results) {
-                        if (node.Id == publishedItem.NodeId) {
-                            node.PublishedItem = publishedItem;
+                    foreach (var publishedNode in PublishedNodes.Results) {
+                        if (node.Id == publishedNode.PublishedItem.NodeId) {
+                            node.PublishedItem = publishedNode.PublishedItem;
                             node.Publishing = true;
                             break;
                         }
@@ -189,14 +189,14 @@ namespace Microsoft.Azure.IIoT.App.Pages {
         /// <param name="node"></param>
         private async Task PublishNodeAsync(string endpointId, ListNode node) {
             node.Publishing = true;
-            var publishingInterval = node.PublishedItem?.PublishingInterval == null ? TimeSpan.FromMilliseconds(1000) : node.PublishedItem.PublishingInterval;
-            var samplingInterval = node.PublishedItem?.SamplingInterval == null ? TimeSpan.FromMilliseconds(1000) : node.PublishedItem.SamplingInterval;
-            var heartbeatInterval = node.PublishedItem?.HeartbeatInterval;
+            var item = node.PublishedItem;
+            var publishingInterval = IsTimeIntervalSet(item?.PublishingInterval) ? item.PublishingInterval : TimeSpan.FromMilliseconds(1000);
+            var samplingInterval = IsTimeIntervalSet(item?.SamplingInterval) ? item.SamplingInterval : TimeSpan.FromMilliseconds(1000);
+            var heartbeatInterval = IsTimeIntervalSet(item?.HeartbeatInterval) ? item.HeartbeatInterval : null;
             var result = await Publisher.StartPublishingAsync(endpointId, node.Id, node.NodeName, samplingInterval, publishingInterval, heartbeatInterval, Credential);
             if (result) {
-                node.PublishedItem = new OpcUa.Api.Publisher.Models.PublishedItemApiModel() {
+                node.PublishedItem = new PublishedItemApiModel() {
                     NodeId = node.Id,
-                    DisplayName = node.NodeName,
                     PublishingInterval = publishingInterval,
                     SamplingInterval = samplingInterval,
                     HeartbeatInterval = heartbeatInterval
@@ -207,7 +207,6 @@ namespace Microsoft.Azure.IIoT.App.Pages {
                 }
             }
             else {
-                node.PublishedItem = null;
                 node.Publishing = false;
             }
         }
@@ -220,7 +219,6 @@ namespace Microsoft.Azure.IIoT.App.Pages {
         private async Task UnPublishNodeAsync(string endpointId, ListNode node) {
             var result = await Publisher.StopPublishingAsync(endpointId, node.Id, Credential);
             if (result) {
-                node.PublishedItem = null;
                 node.Publishing = false;
             }
         }
@@ -284,6 +282,15 @@ namespace Microsoft.Azure.IIoT.App.Pages {
         private async Task<T> GetSecureItemAsync<T>(string key) {
             var serializedProtectedData = await sessionStorage.GetItemAsync<string>(key);
             return secureData.UnprotectDeserialize<T>(serializedProtectedData);
+        }
+
+        /// <summary>
+        /// Checks whether the time interval is set or not
+        /// </summary>
+        /// <param name="interval"></param>
+        /// <returns>True when the interval is set, false otherwise</returns>
+        private bool IsTimeIntervalSet(TimeSpan? interval) {
+            return interval != null && interval.Value != TimeSpan.MinValue;
         }
     }
 }

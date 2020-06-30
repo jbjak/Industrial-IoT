@@ -14,13 +14,13 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Twin.Cli {
     using Microsoft.Azure.IIoT.Exceptions;
     using Microsoft.Azure.IIoT.Utils;
     using Microsoft.Extensions.Configuration;
+    using Opc.Ua;
     using Serilog;
     using Serilog.Events;
     using System;
     using System.Collections.Generic;
     using System.Diagnostics.Tracing;
     using System.Linq;
-    using System.Net;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -165,7 +165,7 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Twin.Cli {
                     case Op.Add:
                     case Op.Host:
                         if (deviceId == null) {
-                            deviceId = Dns.GetHostName();
+                            deviceId = Utils.GetHostName();
                             Console.WriteLine($"Using <deviceId> '{deviceId}'");
                         }
                         if (moduleId == null) {
@@ -418,7 +418,7 @@ Options:
                     }
                 }
             }
-            await registry.CreateAsync(item, true, CancellationToken.None);
+            await registry.CreateOrUpdateAsync(item, true, CancellationToken.None);
         }
 
         /// <summary>
@@ -430,7 +430,7 @@ Options:
             var registry = new IoTHubServiceHttpClient(new HttpClient(logger),
                 config, new NewtonSoftJsonSerializer(), logger);
             try {
-                await registry.CreateAsync(new DeviceTwinModel {
+                await registry.CreateOrUpdateAsync(new DeviceTwinModel {
                     Id = deviceId,
                     Tags = new Dictionary<string, VariantValue> {
                         [TwinProperty.Type] = IdentityType.Gateway
@@ -444,7 +444,7 @@ Options:
                 logger.Information("Gateway {deviceId} exists.", deviceId);
             }
             try {
-                await registry.CreateAsync(new DeviceTwinModel {
+                await registry.CreateOrUpdateAsync(new DeviceTwinModel {
                     Id = deviceId,
                     ModuleId = moduleId
                 }, false, CancellationToken.None);

@@ -16,6 +16,7 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Cli {
     using Microsoft.Azure.IIoT.Serializers.NewtonSoft;
     using Microsoft.Azure.IIoT.Serializers;
     using Microsoft.Extensions.Configuration;
+    using Opc.Ua;
     using Serilog;
     using Serilog.Events;
     using System;
@@ -96,7 +97,7 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Cli {
                 config = connectionString.ToIoTHubConfig();
 
                 if (deviceId == null) {
-                    deviceId = Dns.GetHostName();
+                    deviceId = Utils.GetHostName();
                     Console.WriteLine($"Using <deviceId> '{deviceId}'");
                 }
                 if (moduleId == null) {
@@ -206,7 +207,7 @@ Options:
             var registry = new IoTHubServiceHttpClient(new HttpClient(logger),
                 config, new NewtonSoftJsonSerializer(), logger);
             try {
-                await registry.CreateAsync(new DeviceTwinModel {
+                await registry.CreateOrUpdateAsync(new DeviceTwinModel {
                     Id = deviceId,
                     Tags = new Dictionary<string, VariantValue> {
                         [TwinProperty.Type] = IdentityType.Gateway
@@ -220,7 +221,7 @@ Options:
                 logger.Information("Gateway {deviceId} exists.", deviceId);
             }
             try {
-                await registry.CreateAsync(new DeviceTwinModel {
+                await registry.CreateOrUpdateAsync(new DeviceTwinModel {
                     Id = deviceId,
                     ModuleId = moduleId
                 }, false, CancellationToken.None);
@@ -255,7 +256,7 @@ Options:
             public ServerWrapper(ILogger logger) {
                 _cts = new CancellationTokenSource();
                 _server = RunSampleServerAsync(_cts.Token, logger);
-                EndpointUrl = "opc.tcp://" + Dns.GetHostName() +
+                EndpointUrl = "opc.tcp://" + Utils.GetHostName() +
                     ":51210/UA/SampleServer";
             }
 

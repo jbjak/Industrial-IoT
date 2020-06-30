@@ -28,7 +28,7 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Runtime {
     /// Class that represents a dictionary with all command line arguments from the legacy version of the OPC Publisher
     /// </summary>
     public class LegacyCliOptions : Dictionary<string, string>, IAgentConfigProvider,
-        IEngineConfiguration, ILegacyCliModelProvider {
+        ISettingsController, IEngineConfiguration, ILegacyCliModelProvider {
         /// <summary>
         /// Creates a new instance of the the legacy CLI options based on existing configuration values.
         /// </summary>
@@ -266,13 +266,13 @@ namespace Microsoft.Azure.IIoT.Modules.OpcUa.Publisher.Runtime {
                 DiagnosticsInterval = GetValueOrDefault(LegacyCliConfigKeys.DiagnosticsInterval, TimeSpan.FromSeconds(60)),
                 LogFileFlushTimeSpan = GetValueOrDefault(LegacyCliConfigKeys.LogFileFlushTimeSpanSec, TimeSpan.FromSeconds(30)),
                 LogFilename = GetValueOrDefault<string>(LegacyCliConfigKeys.LogFileName, null),
-                Transport = GetValueOrDefault(LegacyCliConfigKeys.HubTransport, TransportType.Mqtt.ToString()), // todo this seem not to be used ... 
+                Transport = GetValueOrDefault(LegacyCliConfigKeys.HubTransport, TransportType.Amqp.ToString()),
                 MessagingMode = GetValueOrDefault(LegacyCliConfigKeys.MessagingMode, MessagingMode.Samples),
                 MessageEncoding = GetValueOrDefault(LegacyCliConfigKeys.MessageEncoding, MessageEncoding.Json),
                 FullFeaturedMessage = GetValueOrDefault(LegacyCliConfigKeys.FullFeaturedMessage, false),
                 EdgeHubConnectionString = GetValueOrDefault<string>(LegacyCliConfigKeys.EdgeHubConnectionString, null),
                 OperationTimeout = GetValueOrDefault(LegacyCliConfigKeys.OpcOperationTimeout, TimeSpan.FromSeconds(15)),
-                MaxStringLength = GetValueOrDefault(LegacyCliConfigKeys.OpcMaxStringLength, TransportQuotaConfigEx.DefaultMaxStringLength), // todo this is not used
+                MaxStringLength = GetValueOrDefault(LegacyCliConfigKeys.OpcMaxStringLength, TransportQuotaConfigEx.DefaultMaxStringLength),
                 SessionCreationTimeout = GetValueOrDefault(LegacyCliConfigKeys.OpcSessionCreationTimeout, TimeSpan.FromSeconds(1)),
                 KeepAliveInterval = GetValueOrDefault(LegacyCliConfigKeys.OpcKeepAliveIntervalInSec, TimeSpan.FromSeconds(10)),
                 MaxKeepAliveCount = GetValueOrDefault(LegacyCliConfigKeys.OpcKeepAliveDisconnectThreshold, 50),
